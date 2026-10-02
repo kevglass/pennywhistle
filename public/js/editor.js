@@ -1,5 +1,5 @@
 import { analyzeTune, buildDisplayAbc, bestTranspose, whistleStats, cleanAbc, tabDocument, transposedKeyName } from './core.js';
-import { TabView, Player, tone, defaultBpm } from './render.js';
+import { TabView, Player, whistleNote, defaultBpm } from './render.js';
 import { renderPages, pagesToImages, showPages, ACCEPTED } from './originals.js';
 import { $, api, apiUrl, esc, topbar, renderNow, originalSources, tabStyleControl } from './ui.js';
 
@@ -45,7 +45,7 @@ let showOriginal = false;
 const view = new TabView($('#preview'), {
   onSelect: (item, i, ctx) => {
     renderNow($('#now'), item, ctx);
-    if (ctx.source !== 'play' && item.type === 'note') tone(item.midi, undefined, Math.min(0.6, 0.25 + item.beats * 0.1));
+    if (ctx.source !== 'play' && item.type === 'note') whistleNote(item.midi, undefined, Math.min(0.7, 0.3 + item.beats * 0.12));
   },
 });
 const player = new Player(view, { onStop: () => { $('#play').textContent = '▶ Play'; } });

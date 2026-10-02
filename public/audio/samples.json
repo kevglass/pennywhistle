@@ -1,0 +1,112 @@
+[
+ {
+  "note": "D5",
+  "midi": 74,
+  "cents": -2,
+  "file": "whistle-D5.wav",
+  "loopStart": 0.16,
+  "loopEnd": 0.8947,
+  "length": 0.926,
+  "source": "baidin @ 24.532s"
+ },
+ {
+  "note": "E5",
+  "midi": 76,
+  "cents": -2,
+  "file": "whistle-E5.wav",
+  "loopStart": 0.16,
+  "loopEnd": 0.8889,
+  "length": 0.92,
+  "source": "baidin @ 12.167s"
+ },
+ {
+  "note": "F#5",
+  "midi": 78,
+  "cents": -17,
+  "file": "whistle-Fs5.wav",
+  "loopStart": 0.16,
+  "loopEnd": 0.7386,
+  "length": 0.769,
+  "source": "baidin @ 8.945s"
+ },
+ {
+  "note": "G5",
+  "midi": 79,
+  "cents": -12,
+  "file": "whistle-G5.wav",
+  "loopStart": 0.16,
+  "loopEnd": 0.4426,
+  "length": 0.473,
+  "source": "baidin @ 46.835s"
+ },
+ {
+  "note": "A5",
+  "midi": 81,
+  "cents": 7,
+  "file": "whistle-A5.wav",
+  "loopStart": 0.16,
+  "loopEnd": 0.9704,
+  "length": 1.001,
+  "source": "baidin @ 13.775s"
+ },
+ {
+  "note": "B5",
+  "midi": 83,
+  "cents": 4,
+  "file": "whistle-B5.wav",
+  "loopStart": 0.16,
+  "loopEnd": 0.8832,
+  "length": 0.914,
+  "source": "baidin @ 32.102s"
+ },
+ {
+  "note": "C#6",
+  "midi": 85,
+  "cents": -25,
+  "file": "whistle-Cs6.wav",
+  "loopStart": 0.16,
+  "loopEnd": 0.3265,
+  "length": 0.357,
+  "source": "baidin @ 33.088s"
+ },
+ {
+  "note": "D6",
+  "midi": 86,
+  "cents": 1,
+  "file": "whistle-D6.wav",
+  "loopStart": 0.16,
+  "loopEnd": 0.896,
+  "length": 0.926,
+  "source": "baidin @ 33.512s"
+ },
+ {
+  "note": "E6",
+  "midi": 88,
+  "cents": 3,
+  "file": "whistle-E6.wav",
+  "loopStart": 0.16,
+  "loopEnd": 0.4485,
+  "length": 0.479,
+  "source": "baidin @ 29.983s"
+ },
+ {
+  "note": "F#6",
+  "midi": 90,
+  "cents": -2,
+  "file": "whistle-Fs6.wav",
+  "loopStart": 0.16,
+  "loopEnd": 0.7844,
+  "length": 0.815,
+  "source": "baidin @ 39.938s"
+ },
+ {
+  "note": "G6",
+  "midi": 91,
+  "cents": -1,
+  "file": "whistle-G6.wav",
+  "loopStart": 0.16,
+  "loopEnd": 0.8198,
+  "length": 0.85,
+  "source": "baidin @ 41.343s"
+ }
+]

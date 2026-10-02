@@ -6,7 +6,7 @@ Turn sheet music (PDF or photos/scans) into easy-to-follow **D tin whistle tabla
 - The engraved score is shown with a whistle tab row under every line. Each note shows **how many holes to hold down from the top** (`3` = holes 1–3; `0/2` = top hole open, hold the next 2; `0` = all open; `'` after the number = blow harder for the high octave; `½` = also half-cover the next hole), or hole diagrams if you prefer, plus a bar for how long it lasts. Rests and tied notes are marked too.
 - **Download PDF** gives the score with the number tab under every line and guitar chord diagrams. There's also a JSON download.
 - Light mode by default, with a dark-mode toggle in the top bar.
-- Works on phones and tablets: on a phone the player becomes a compact bar at the bottom of the screen, and **Play** uses a synthesised tin-whistle sound (breathy tone, air "chiff" on each note, gentle vibrato).
+- A thin player bar fixed to the top of the screen (play, tempo, tab style, and the selected note's fingering and chord) collapses to a small icon at the top left. **Play** and tapping a note use recordings of a real D tin whistle (see Credits). Works on phones and tablets.
 - Click any note in the score (or in the tab) to highlight its fingering and see it enlarged with the guitar chord for that spot. The ← → keys step through the notes and **Play** plays the tune, following repeats.
 - Chords come from the score when it prints them. Otherwise the app suggests chords that fit each bar.
 - **Best key for whistle** finds a transposition that keeps every note in range with as little half-holing as possible.
@@ -88,3 +88,8 @@ data/tunes/<id>/
 - `samples/`: public-domain and CC-licensed sheet music for testing (see `samples/README.md`).
 
 Transcription accuracy depends on scan quality. Always compare the tab with the original (the editor shows them side by side) before approving.
+
+## Credits
+
+- Tin whistle playback samples: cut from *Báidín Fheilimí* played by **Jules Grandgagnage** ([Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Baidin_Feidhlimidh_tinwhistleD.ogg)), [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The sample files in `public/audio/` are CC BY-SA 4.0; see `public/audio/README.md`.
+- Score engraving: [abcjs](https://www.abcjs.net/) (MIT). PDF rendering: [PDF.js](https://mozilla.github.io/pdf.js/) (Apache-2.0). PDF export: [jsPDF](https://github.com/parallax/jsPDF) and [svg2pdf.js](https://github.com/yWorks/svg2pdf.js) (MIT).

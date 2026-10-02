@@ -19,7 +19,7 @@
     </div>
     <div class="actions">
       <button class="btn" id="toggle-original" aria-pressed="false" hidden>Show original</button>
-      <button class="btn primary" id="pdf" type="button"><span class="wide-only">Download&nbsp;</span>PDF</button>
+      <button class="btn primary" id="pdf" type="button"><span class="wide-only">Download</span> PDF</button>
       <a class="btn" id="edit" href="#">Edit</a>
       <details class="more">
         <summary class="btn" aria-label="More actions">⋯ More</summary>
@@ -35,8 +35,9 @@
   <div class="split" id="split">
     <aside class="original-pane" id="original" hidden aria-label="Original music"></aside>
     <div class="tab-pane">
-      <div class="player">
+      <div class="player" role="region" aria-label="Player">
         <div class="controls">
+          <button class="player-toggle" type="button" aria-expanded="true" aria-label="Hide player" title="Hide player"><span class="when-open" aria-hidden="true">‹</span><span class="when-closed" aria-hidden="true">♪</span></button>
           <button class="btn" id="play" type="button">▶ Play</button>
           <button class="btn settings-toggle" type="button" aria-expanded="false" aria-label="Player settings">⚙</button>
           <div class="settings">
@@ -64,7 +65,7 @@
 
 <script type="module">
 import { buildDisplayAbc } from './js/core.js';
-import { TabView, Player, tone, defaultBpm } from './js/render.js';
+import { TabView, Player, whistleNote, defaultBpm } from './js/render.js';
 import { renderPages, showPages } from './js/originals.js';
 import { $, api, esc, topbar, renderNow, renderChordList, renderLegend, originalSources, tabStyleControl } from './js/ui.js';
 
@@ -75,7 +76,7 @@ const id = new URLSearchParams(location.search).get('id');
 const view = new TabView($('#tab'), {
   onSelect: (item, i, ctx) => {
     renderNow($('#now'), item, ctx);
-    if (ctx.source !== 'play' && item.type === 'note' && $('#sound').checked) tone(item.midi, undefined, Math.min(0.6, 0.25 + item.beats * 0.1));
+    if (ctx.source !== 'play' && item.type === 'note' && $('#sound').checked) whistleNote(item.midi, undefined, Math.min(0.7, 0.3 + item.beats * 0.12));
   },
 });
 const player = new Player(view, { onStop: () => { $('#play').textContent = '▶ Play'; } });

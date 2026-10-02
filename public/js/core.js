@@ -379,6 +379,8 @@ export function cleanAbc(text) {
   if (fence) t = fence[1];
   const x = t.search(/^X:/m);
   if (x > 0) t = t.slice(x);
+  // A blank line ends a tune in ABC; drop them so a stray one can't cut the music off.
+  t = t.split('\n').filter((l) => l.trim() !== '').join('\n');
   return t.trim() + '\n';
 }
 

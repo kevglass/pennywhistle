@@ -3,7 +3,7 @@
 import { analyzeTune, fingerNumbers, markFor } from './core.js';
 
 // vertical room reserved under each system for the tab row
-const tabHeight = () => (getTabStyle() === 'holes' ? 132 : 78);
+const tabHeight = () => (getTabStyle() === 'holes' ? 118 : 60);
 
 const FRACTIONS = { 0.25: '¼', 0.333: '⅓', 0.5: '½', 0.667: '⅔', 0.75: '¾', 0.125: '⅛', 0.167: '⅙' };
 export function beatsLabel(b) {
@@ -185,13 +185,6 @@ export class TabView {
         cell.addEventListener('click', (e) => { e.stopPropagation(); this.select(r.index, { source: 'tab' }); });
         row.appendChild(cell);
 
-        const bar = document.createElement('div');
-        bar.className = `sustain ${it.type}`;
-        bar.style.left = x - 6 + 'px';
-        bar.style.width = Math.max(10, next - x - 2) + 'px';
-        bar.innerHTML = `<span>${len}</span>`;
-        bar.title = `${len} beat${it.beats === 1 ? '' : 's'}`;
-        row.appendChild(bar);
         this.cells[r.index] = cell;
       });
     }
@@ -314,7 +307,7 @@ function wave(a) {
  * small pitch scoop at the start, and gentle vibrato on longer notes.
  * A D whistle sounds an octave above the written pitch.
  */
-export function tone(midi, start, dur, level = 0.2, context = null) {
+export function tone(midi, start, dur, level = 0.2, context = null, dest = null) {
   const a = context || audio(); // context: e.g. an OfflineAudioContext for rendering
   const t0 = Math.max(start ?? a.currentTime, a.currentTime);
   const f = 440 * Math.pow(2, (midi + 12 - 69) / 12);
@@ -325,7 +318,7 @@ export function tone(midi, start, dur, level = 0.2, context = null) {
   lp.type = 'lowpass';
   lp.frequency.value = Math.min(12000, f * 6);
   lp.connect(out);
-  out.connect(a.destination);
+  out.connect(dest || a.destination);
 
   // tone
   const osc = a.createOscillator();
@@ -377,6 +370,83 @@ export function tone(midi, start, dur, level = 0.2, context = null) {
   for (const node of [osc, vib, breath, chiff]) { node.start(t0); node.stop(end + 0.05); }
 }
 
+// ---------------------------------------------------------- recorded samples
+
+// Real D tin whistle notes (see public/audio/README.md); the synth above is the fallback.
+const SAMPLE_DIR = new URL('../audio/', import.meta.url);
+const banks = new WeakMap(); // AudioContext -> Promise<[{midi, cents, buffer, loopStart, loopEnd}]>
+
+/** Load and decode the sample set for an audio context (once per context). */
+export function loadSamples(context = null) {
+  const a = context || audio();
+  if (!banks.has(a)) {
+    banks.set(a, (async () => {
+      const list = await (await fetch(new URL('samples.json', SAMPLE_DIR))).json();
+      return Promise.all(list.map(async (s) => ({
+        ...s,
+        buffer: await a.decodeAudioData(await (await fetch(new URL(s.file, SAMPLE_DIR))).arrayBuffer()),
+      })));
+    })().catch((e) => { console.warn('Whistle samples unavailable, using synthesised sound:', e); banks.delete(a); return null; }));
+  }
+  return banks.get(a);
+}
+
+/** Bring a written pitch into the D whistle's range (as the tab does), as a sounding pitch. */
+function soundingPitch(midi) {
+  let m = midi;
+  while (m < 62) m += 12;
+  while (m > 86) m -= 12;
+  return m + 12; // a D whistle sounds an octave above written pitch
+}
+
+function playSample(a, bank, midi, t0, dur, level, dest) {
+  const target = soundingPitch(midi);
+  let s = bank[0];
+  for (const b of bank) if (Math.abs(b.midi - target) < Math.abs(s.midi - target)) s = b;
+  const src = a.createBufferSource();
+  src.buffer = s.buffer;
+  src.playbackRate.value = 2 ** ((target - (s.midi + s.cents / 100)) / 12);
+  const natural = s.buffer.duration / src.playbackRate.value;
+  if (dur > natural - 0.05) { // hold longer than the recording: loop its steady middle
+    src.loop = true;
+    src.loopStart = s.loopStart;
+    src.loopEnd = s.loopEnd;
+  }
+  const g = a.createGain();
+  const end = t0 + Math.max(0.08, dur - 0.02); // tiny gap so repeated notes are tongued
+  const rel = Math.min(0.06, (end - t0) / 3);
+  g.gain.setValueAtTime(level, t0);
+  g.gain.setValueAtTime(level, end - rel);
+  g.gain.linearRampToValueAtTime(0.0001, end);
+  src.connect(g).connect(dest || a.destination);
+  src.start(t0);
+  src.stop(end + 0.02);
+}
+
+/**
+ * Play a note: the recorded whistle when its samples are loaded, otherwise the synth.
+ * (Samples start loading on first use; the first tap may use the synth.)
+ */
+export function whistleNote(midi, start, dur, context = null, dest = null) {
+  const a = context || audio();
+  const t0 = Math.max(start ?? a.currentTime, a.currentTime);
+  const bank = readyBanks.get(a);
+  if (bank) playSample(a, bank, midi, t0, dur, 0.9, dest);
+  else {
+    loadSamples(a).then((b) => { if (b) readyBanks.set(a, b); });
+    tone(midi, t0, dur, 0.2, a, dest);
+  }
+}
+const readyBanks = new WeakMap();
+
+/** Await the samples (used before playback so a whole tune uses the recordings). */
+export async function samplesReady(context = null) {
+  const a = context || audio();
+  const b = await loadSamples(a);
+  if (b) readyBanks.set(a, b);
+  return !!b;
+}
+
 export class Player {
   constructor(view, { onStop } = {}) {
     this.view = view;
@@ -386,8 +456,11 @@ export class Player {
   }
 
   /** bpm counts the tune's beat unit (from Q: or the meter). */
-  play(bpm, fromItem = -1) {
+  async play(bpm, fromItem = -1) {
     this.stop();
+    this.playing = true;
+    await samplesReady();
+    if (!this.playing) return; // stopped while loading
     const v = this.view;
     if (!v.items.length) return;
     const beatLen = (v.visual.getBeatLength && v.visual.getBeatLength()) || 0.25;
@@ -399,9 +472,10 @@ export class Player {
       if (at > 0) order = order.slice(at);
     }
     const a = audio();
+    this.bus = a.createGain();
+    this.bus.connect(a.destination);
     let t = a.currentTime + 0.12;
     const t0 = t;
-    this.playing = true;
     order.forEach((idx, k) => {
       const it = v.items[idx];
       const dur = (it.beats / den) * wholeSec;
@@ -409,7 +483,7 @@ export class Player {
         // extend through following tied "hold" items
         let sound = dur;
         for (let j = k + 1; j < order.length && v.items[order[j]].type === 'hold'; j++) sound += (v.items[order[j]].beats / den) * wholeSec;
-        tone(it.midi, t, sound);
+        whistleNote(it.midi, t, sound, a, this.bus);
       }
       const delay = (t - t0) * 1000 + 120;
       if (!it.invisible) this.timers.push(setTimeout(() => v.select(idx, { source: 'play', scroll: true }), delay));
@@ -422,6 +496,11 @@ export class Player {
     this.timers.forEach(clearTimeout);
     this.timers = [];
     if (this.playing) { this.playing = false; this.onStop(); }
-    if (ctx) { try { ctx.close(); } catch { /* already closed */ } ctx = null; }
+    if (this.bus) { // silence anything still scheduled, keep the audio context (and samples)
+      const bus = this.bus, a = bus.context;
+      bus.gain.setTargetAtTime(0, a.currentTime, 0.02);
+      setTimeout(() => bus.disconnect(), 300);
+      this.bus = null;
+    }
   }
 }

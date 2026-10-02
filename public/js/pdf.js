@@ -68,13 +68,7 @@ function drawTabRow(svg, view, box, width) {
     } else {
       svg.appendChild(el('text', { ...font, x, y: y0 + (holesStyle ? 50 : 30), 'font-size': 9, 'font-style': 'italic', fill: C.muted }, it.type === 'rest' ? 'rest' : 'hold'));
     }
-    // note length bar
-    const by = holesStyle ? bottom - 6 : y0 + 44;
-    const color = it.type === 'rest' ? C.muted : C.accent;
-    const x2 = Math.max(x + 4, r.tabNext - 2);
-    svg.appendChild(el('line', { x1: x - 6, y1: by - 5, x2: x - 6, y2: by + 5, stroke: color, 'stroke-width': 1.4 }));
-    svg.appendChild(el('line', { x1: x - 6, y1: by, x2, y2: by, stroke: color, 'stroke-width': 1.6, 'stroke-opacity': it.type === 'rest' ? 0.6 : 0.5, ...(it.type === 'rest' ? { 'stroke-dasharray': '3 2' } : {}) }));
-    svg.appendChild(el('text', { 'font-family': 'helvetica', x: x2, y: by - 2.5, 'font-size': 7, 'text-anchor': 'end', fill: C.muted }, pdfText(beatsLabel(it.beats))));
+
   }
 }
 
@@ -127,7 +121,7 @@ export async function downloadPdf({ displayAbc, title, composer, key, meter, cho
     y += 6;
     doc.setFontSize(8.5);
     doc.setTextColor(85);
-    const howTo = "Numbers = how many holes to hold down from the top (mouthpiece end): 3 = holes 1-3.  0/N = top hole open, hold the next N (0/2 = holes 2-3).  0 = all open.  ' = blow harder (high octave).  ½ = also half-cover the next hole.  Bars under the notes show how long each lasts (in beats).";
+    const howTo = "Numbers = how many holes to hold down from the top (mouthpiece end): 3 = holes 1-3.  0/N = top hole open, hold the next N (0/2 = holes 2-3).  0 = all open.  ' = blow harder (high octave).  ½ = also half-cover the next hole.";
     const howLines = doc.splitTextToSize(pdfText(howTo), W);
     doc.text(howLines, PW / 2, y, { align: 'center' });
     y += howLines.length * 3.6 + 3;

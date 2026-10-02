@@ -21,34 +21,34 @@ export async function api(route, opts = {}) {
 
 const pretty = (n) => n.replace('#', '♯').replace(/b(\d|$)/, '♭$1');
 
-/** The big "current note" read-out shown above the tab. */
+/** Compact read-out of the selected note, shown in the player bar. */
 export function renderNow(el, item, { chord } = {}) {
   if (!item) {
-    el.innerHTML = '<div class="empty-now">Click a note in the music or the tab to see its fingering.</div>';
+    el.innerHTML = '<span class="empty-now">Tap a note to see its fingering</span>';
     return;
   }
   const len = beatsLabel(item.beats);
   const beatWord = item.beats === 1 ? 'beat' : 'beats';
-  let holes = '', desc = '';
+  let html = '';
   if (item.type === 'note') {
-    holes = `<div class="big-holes">${holesSVG(item.holes, { r: 8, gap: 18, groupGap: 8, label: 'Fingering for ' + item.pitch })}</div>`;
-    const mark = markFor(item.holes, item.register);
-    const breath = item.register === 3 ? `<span class="upper">Blow much harder (3rd octave)${mark ? ' ' + mark : ''}</span>`
-      : item.register === 2 ? `<span class="upper">Blow harder (high octave)${mark ? ' ' + mark : ''}</span>` : 'Gentle breath (low octave)';
+    const breath = item.register === 3 ? 'blow much harder' : item.register === 2 ? 'blow harder' : '';
     const extras = [
-      item.halfHole ? 'Half-cover the marked hole' : '',
-      item.cross ? 'Cross fingering' : '',
-      item.octaveShift ? `Out of range: played ${item.octaveShift > 0 ? 'an octave higher' : 'an octave lower'}` : '',
-      item.tie ? 'Tied: keep holding into the next note' : '',
-    ].filter(Boolean).map((t) => `<div class="hint">${t}</div>`).join('');
-    desc = `<div class="desc"><div class="name">${pretty(item.name)}<span class="muted small"> (${esc(item.pitch)})</span></div><div class="fingers" title="Holes to cover">${fingerNumbers(item.holes, item.register)}</div><div>${breath}</div><div class="hint">Length: ${len} ${beatWord}</div>${extras}</div>`;
+      item.halfHole ? 'half-cover the hole' : '',
+      item.cross ? 'cross fingering' : '',
+      item.octaveShift ? `played ${item.octaveShift > 0 ? 'an octave up' : 'an octave down'}` : '',
+      item.tie ? 'tied: keep holding' : '',
+    ].filter(Boolean);
+    html = `<span class="mini-holes">${holesSVG(item.holes, { r: 3.3, gap: 6.4, groupGap: 3, pad: 1, label: 'Fingering for ' + item.pitch })}</span>`
+      + `<span class="n-name">${pretty(item.name)}</span>`
+      + `<span class="fingers" title="Holes to hold down">${fingerNumbers(item.holes, item.register)}</span>`
+      + `<span class="n-sub">${[`${len} ${beatWord}`, breath, ...extras].filter(Boolean).join(' · ')}</span>`;
   } else if (item.type === 'rest') {
-    desc = `<div class="desc"><div class="name">Rest</div><div class="hint">Silence for ${len} ${beatWord}. Take a breath.</div></div>`;
+    html = `<span class="n-name">Rest</span><span class="n-sub">${len} ${beatWord}</span>`;
   } else {
-    desc = `<div class="desc"><div class="name">Hold</div><div class="hint">Keep the previous note sounding for ${len} more ${beatWord}.</div></div>`;
+    html = `<span class="n-name">Hold</span><span class="n-sub">keep the note going, ${len} ${beatWord}</span>`;
   }
-  const ch = chord ? `<div class="chord" title="Guitar chord">${chordDiagramSVG(chord)}</div>` : '';
-  el.innerHTML = holes + desc + ch;
+  if (chord) html += `<span class="n-chord" title="Guitar chord">${esc(chord)}</span>`;
+  el.innerHTML = html;
 }
 
 export function renderChordList(el, names) {
@@ -72,11 +72,33 @@ export function renderLegend(el) {
     <div class="item"><span class="sw">${holesSVG('XXXOOO')}</span><span>Holes from the mouthpiece (top) down. <b>●</b> cover, <b>○</b> open. Left hand covers the top three.</span></div>
     <div class="item"><span class="sw">${holesSVG('XXHOOO')}</span><span>Half-filled hole, or <b>½</b> after a number = also half-cover the next hole (<b>4½</b> = holes 1–4 and half of 5).</span></div>
     <div class="item"><span class="sw" style="color:var(--upper);font-weight:900;font-size:18px">3'</span><span><b>'</b> after the number = blow harder for the high octave (same fingering). <b>''</b> = harder still. <b>0/</b> fingerings never have <b>'</b>; they are already high notes.</span></div>
-    <div class="item"><span class="sw" style="width:46px;position:relative;height:14px"><span class="sustain" style="left:0;width:44px;bottom:0"><span>1½</span></span></span><span>Bar under each note = how long it lasts, with its count in beats.</span></div>
     <div class="item"><span class="sw rest-mark" style="height:auto;writing-mode:horizontal-tb">rest</span><span>Rest: stop blowing for the length shown.</span></div>
     <div class="item"><span class="sw hold-mark" style="height:auto;writing-mode:horizontal-tb">hold</span><span>Hold: a tied note, keep the previous note going.</span></div>
     <div class="item"><span class="sw" style="color:var(--accent);font-weight:700">G&nbsp;D7</span><span>Guitar chords appear above the music where they change.</span></div>
     <div class="item"><span class="sw" style="color:var(--warn);font-weight:700;font-size:11px">8↑</span><span>Note was too low/high for the whistle, so it's shown an octave up/down.</span></div>`;
+}
+
+// ---- player bar: collapses to an icon at the top left (remembered)
+const PLAYER_KEY = 'pw-player-collapsed';
+function setPlayerCollapsed(player, collapsed) {
+  player.classList.toggle('collapsed', collapsed);
+  player.classList.remove('show-settings');
+  document.body.classList.toggle('player-collapsed', collapsed);
+  const btn = player.querySelector('.player-toggle');
+  btn.setAttribute('aria-expanded', String(!collapsed));
+  btn.setAttribute('aria-label', collapsed ? 'Show player' : 'Hide player');
+  btn.title = collapsed ? 'Show player' : 'Hide player';
+  try { localStorage.setItem(PLAYER_KEY, collapsed ? '1' : '0'); } catch { /* storage blocked */ }
+}
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.player-toggle');
+  if (btn) { const p = btn.closest('.player'); setPlayerCollapsed(p, !p.classList.contains('collapsed')); }
+});
+{
+  const player = document.querySelector('.player');
+  let collapsed = false;
+  try { collapsed = localStorage.getItem(PLAYER_KEY) === '1'; } catch { /* storage blocked */ }
+  if (player) setPlayerCollapsed(player, collapsed);
 }
 
 // ---- light / dark theme (light by default; the choice is remembered)

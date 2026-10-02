@@ -61,8 +61,9 @@
     <div class="split" id="split">
       <aside class="original-pane" id="original" hidden aria-label="Original music"></aside>
       <div class="tab-pane">
-        <div class="player">
+        <div class="player" role="region" aria-label="Player">
           <div class="controls">
+            <button class="player-toggle" type="button" aria-expanded="true" aria-label="Hide player" title="Hide player"><span class="when-open" aria-hidden="true">‹</span><span class="when-closed" aria-hidden="true">♪</span></button>
             <button class="btn" id="play" type="button">▶ Play</button>
             <button class="btn settings-toggle" type="button" aria-expanded="false" aria-label="Player settings">⚙</button>
             <div class="settings">
