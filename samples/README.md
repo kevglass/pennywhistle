@@ -9,7 +9,7 @@ Files for trying out the app, roughly easiest to hardest. Upload them on the **+
 | `holly-and-the-ivy-phone-photo.jpg` | The same page made to look like a phone photo: tilted, uneven light, soft focus, heavy JPEG | Derived from the above, Public Domain |
 | `good-king-wenceslas.pdf` | Four-part hymn (SATB). The melody is the top voice of the upper staff, and it has a printed tempo. | Mutopia (James Kilfiger), Public Domain |
 | `greensleeves-voice-guitar.pdf` | Vocal melody with 5 verses of lyrics above a guitar part with tab, 2 pages, ties | Mutopia: "Greensleeves" typeset by David Kastrup, CC BY-SA 4.0 |
-| `amazing-grace-bagpipes.pdf` | Grace notes on almost every beat (should be ignored), E♭ with 3/8 time | Mutopia: arr. Breizh Partitions, CC BY-SA 3.0 |
+| `amazing-grace-bagpipes.pdf` | Grace notes on almost every beat (should be ignored), E♭ in 9/8 time | Mutopia: arr. Breizh Partitions, CC BY-SA 3.0 |
 | `scarborough-fair-lead-sheet.pdf` | Lead sheet with printed guitar chords, Dorian mode | *The Public Domain Song Anthology* (D. Berger & C. Israels), p. 291, CC0 |
 | `shenandoah-lead-sheet.png` | Lead sheet with chords, given as an image | Same anthology, p. 297, CC0 |
 | `londonderry-air-lead-sheet.png` | Lead sheet with chords, superscripts (C⁷), a second row of alternative chords, 2 verses, 1st/2nd endings | Same anthology, p. 208, CC0 |
