@@ -1,0 +1,13 @@
+Options -Indexes
+DirectoryIndex index.html
+# Never serve the private folder (code, packages, .env secrets, saved tunes)
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^_private(/|$) - [F,L]
+</IfModule>
+<FilesMatch "^\.(env|user\.ini)">
+  Require all denied
+</FilesMatch>
+<IfModule mod_mime.c>
+  AddType text/javascript .mjs
+</IfModule>

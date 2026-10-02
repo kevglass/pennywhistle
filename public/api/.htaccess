@@ -1,0 +1,17 @@
+<IfModule mod_php.c>
+  php_value upload_max_filesize 40M
+  php_value post_max_size 64M
+  php_value memory_limit 256M
+  php_value max_execution_time 600
+  php_flag output_buffering Off
+  php_flag zlib.output_compression Off
+</IfModule>
+# Let PHP see Basic-auth credentials under CGI/FastCGI (used when APP_PASSWORD is set)
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</IfModule>
+# Don't gzip the transcription stream
+<IfModule mod_env.c>
+  SetEnv no-gzip 1
+</IfModule>

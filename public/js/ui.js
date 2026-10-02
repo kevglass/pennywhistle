@@ -4,10 +4,14 @@ import { chordDiagramSVG } from './guitar.js';
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-export async function api(path, opts = {}) {
-  const res = await fetch(path, {
+/** URL of an API route, relative to the page (works when hosted in a sub-folder). */
+export const apiUrl = (route) => `api/index.php?r=${route.split('/').map(encodeURIComponent).join('/')}`;
+
+export async function api(route, opts = {}) {
+  const json = opts.body && !(opts.body instanceof FormData);
+  const res = await fetch(apiUrl(route), {
     ...opts,
-    headers: opts.body ? { 'Content-Type': 'application/json', ...(opts.headers || {}) } : opts.headers,
+    headers: json ? { 'Content-Type': 'application/json', ...(opts.headers || {}) } : opts.headers,
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
@@ -65,11 +69,11 @@ export function renderLegend(el) {
 
 export function topbar(active) {
   return `<header class="topbar">
-    <a class="brand" href="/"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="13" width="26" height="6" rx="3" fill="var(--accent)"/><circle cx="12" cy="16" r="1.6" fill="var(--surface)"/><circle cx="17" cy="16" r="1.6" fill="var(--surface)"/><circle cx="22" cy="16" r="1.6" fill="var(--surface)"/><rect x="3" y="13" width="5" height="6" rx="2" fill="var(--ink)"/></svg>Penny Whistle Tabs</a>
-    <nav><a class="btn ${active === 'library' ? 'primary' : ''}" href="/">Library</a><a class="btn ${active === 'new' ? 'primary' : ''}" href="/editor.html">+ New tab</a></nav>
+    <a class="brand" href="./"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="13" width="26" height="6" rx="3" fill="var(--accent)"/><circle cx="12" cy="16" r="1.6" fill="var(--surface)"/><circle cx="17" cy="16" r="1.6" fill="var(--surface)"/><circle cx="22" cy="16" r="1.6" fill="var(--surface)"/><rect x="3" y="13" width="5" height="6" rx="2" fill="var(--ink)"/></svg>Penny Whistle Tabs</a>
+    <nav><a class="btn ${active === 'library' ? 'primary' : ''}" href="./">Library</a><a class="btn ${active === 'new' ? 'primary' : ''}" href="editor.html">+ New tab</a></nav>
   </header>`;
 }
 
 export function originalSources(tune) {
-  return (tune.originals || []).map((o) => ({ url: `/api/tunes/${encodeURIComponent(tune.id)}/files/${encodeURIComponent(o.file)}`, type: o.type, name: o.originalName }));
+  return (tune.originals || []).map((o) => ({ url: apiUrl(`tunes/${tune.id}/files/${o.file}`), type: o.type, name: o.originalName }));
 }

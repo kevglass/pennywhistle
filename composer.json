@@ -1,0 +1,33 @@
+{
+    "name": "cokeandcode/pennywhistle",
+    "description": "Turn sheet music into penny whistle tabs with guitar chords",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.1",
+        "ext-fileinfo": "*",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "anthropic-ai/sdk": "^0.54.0",
+        "guzzlehttp/guzzle": "^8.2"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true,
+        "platform": {
+            "php": "8.1.0"
+        }
+    },
+    "scripts": {
+        "serve": [
+            "Composer\\Config::disableProcessTimeout",
+            "./dev.sh"
+        ],
+        "deploy": [
+            "Composer\\Config::disableProcessTimeout",
+            "./deploy.sh"
+        ],
+        "secrets:encrypt": "php scripts/secrets.php encrypt",
+        "secrets:decrypt": "php scripts/secrets.php decrypt"
+    }
+}

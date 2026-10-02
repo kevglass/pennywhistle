@@ -2,8 +2,8 @@
 
 let pdfjsPromise = null;
 function pdfjs() {
-  pdfjsPromise ??= import('/vendor/pdf.min.mjs').then((lib) => {
-    lib.GlobalWorkerOptions.workerSrc = '/vendor/pdf.worker.min.mjs';
+  pdfjsPromise ??= import(new URL('../vendor/pdf.min.mjs', import.meta.url).href).then((lib) => {
+    lib.GlobalWorkerOptions.workerSrc = new URL('../vendor/pdf.worker.min.mjs', import.meta.url).href;
     return lib;
   });
   return pdfjsPromise;
@@ -78,13 +78,4 @@ export function showPages(container, pages) {
     fig.appendChild(cap);
     container.appendChild(fig);
   }
-}
-
-export function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(',')[1]);
-    r.onerror = () => reject(r.error);
-    r.readAsDataURL(file);
-  });
 }

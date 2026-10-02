@@ -9,39 +9,64 @@ Turn sheet music (PDF or photos/scans) into easy-to-follow **D tin whistle tabla
 - **Best key for whistle** finds a transposition that keeps every note in range with as little half-holing as possible.
 - Approving a tab saves it to the **library** (the index page). Saved tunes can be opened later, with an optional **Show original music** panel beside the tab.
 
-## Running
+## Hosting requirements
+
+Any web host with **PHP 8.1+** (Apache or nginx). The pages are static HTML/JS. One small PHP endpoint saves tunes as files and calls the Claude API, which keeps the API key off the browser. No Node, no database and no build step on the server.
+
+## Local development
 
 ```bash
-npm install
-cp .env.example .env        # then put your key in .env (or decrypt .env.enc, see below)
-npm start                   # http://localhost:3000
+composer install            # PHP packages (Anthropic SDK)
+cp .env.example .env        # add ANTHROPIC_API_KEY (or: composer secrets:decrypt)
+./dev.sh                    # PHP built-in server on PORT from .env (default 6000)
 ```
 
-Requires Node 22 or newer. Without an API key the app still works: you can enter or paste ABC notation by hand.
+Note: Chrome, Firefox and Safari refuse to open port 6000 (it's reserved for X11). If the page won't load, run `PORT=6060 ./dev.sh` or change `PORT` in `.env`. Without an API key the app still works: you can enter or paste ABC notation by hand.
 
 | Setting (in `.env`) | Purpose |
 | --- | --- |
-| `ANTHROPIC_API_KEY` | Claude API key used to read sheet music (server-side only, never sent to the browser) |
-| `ANTHROPIC_WORKSPACE_ID` | Only for keys that aren't scoped to a workspace |
+| `ANTHROPIC_API_KEY` | Claude API key used to read sheet music (server-side only) |
+| `ANTHROPIC_WORKSPACE_ID` | Only for keys that must name a workspace |
 | `CLAUDE_MODEL` | Defaults to `claude-opus-5-5` |
-| `PORT` | Defaults to `3000` |
-| `DATA_DIR` | Where tunes are stored, defaults to `./data` |
-| `APP_PASSWORD` | Optional: puts the whole site behind HTTP Basic auth (recommended when hosting publicly, since transcriptions cost API credits) |
+| `PORT` | Local dev server port (`./dev.sh`) |
+| `DATA_DIR` | Where tunes are stored, defaults to `data/` next to the app code |
+| `APP_PASSWORD` | Optional: requires HTTP Basic auth for the API (saving and reading music), since transcriptions cost API credits |
+
+## Deploying
+
+```bash
+./deploy.sh             # or: ./deploy.sh --dry-run
+```
+
+The script:
+1. Encrypts `.env` into `.env.enc` if `.env` has changed (it asks for your secrets password), or decrypts `.env.enc` if there is no `.env`.
+2. Runs `composer install --no-dev` when Composer is available.
+3. Uploads over SSH/rsync to `kevglass@cokeandcode.com:cokeandcode.com/pennywhistle`. Override with the `DEPLOY_HOST`, `DEPLOY_PATH` and `SITE_URL` environment variables.
+4. Checks that `https://cokeandcode.com/pennywhistle/_private/.env` is **not** downloadable (it removes the file and stops if it is), and that the API is answering.
+
+Server layout:
+
+```
+pennywhistle/            public: index.html, editor.html, tune.html, js/, css/, vendor/, api/index.php
+pennywhistle/_private/   app/ (PHP code), vendor/ (Composer packages), .env, data/ (saved tunes)
+```
+
+`_private/` is blocked by `.htaccess` (Apache). On **nginx**, add `location ^~ /pennywhistle/_private/ { deny all; }`. Saved tunes in `_private/data` are never overwritten or deleted by a deploy. If uploads of large PDFs fail, raise `upload_max_filesize`/`post_max_size` (preset in `api/.user.ini` and `api/.htaccess`).
 
 ## Encrypted secrets
 
-`.env` is git-ignored. An encrypted copy, `.env.enc` (scrypt + AES-256-GCM), is committed instead:
+`.env` is git-ignored. An encrypted copy, `.env.enc` (Argon2id + XChaCha20-Poly1305 via libsodium), is committed instead:
 
 ```bash
-npm run secrets:encrypt   # .env -> .env.enc  (asks for a password twice)
-npm run secrets:decrypt   # .env.enc -> .env  (asks for the password)
+composer secrets:encrypt   # .env -> .env.enc (asks for a password twice)
+composer secrets:decrypt   # .env.enc -> .env (asks for the password)
 ```
 
-On a server, set `SECRETS_PASSWORD` to decrypt without a prompt: `SECRETS_PASSWORD=… npm run secrets:decrypt`.
+Set `SECRETS_PASSWORD` to skip the prompt.
 
 ## Storage (no database)
 
-Each approved tune is a folder on disk:
+Each approved tune is a folder:
 
 ```
 data/tunes/<id>/
@@ -52,11 +77,10 @@ data/tunes/<id>/
 
 `tune.json` holds the title, settings, the approved ABC transcription, and a `tab` object. That object has the key, the meter, the chords used, and every bar's chords and notes. Each note has its pitch, MIDI number, length in beats, whistle `holes` (top to bottom, `X` = covered, `O` = open, `H` = half-covered) and `register` (2 = blow harder). Back up or move the `data/` folder to keep the library.
 
-## How it works
+## Code map
 
-- `server.js`: a dependency-light Node HTTP server. It serves `public/`, stores tunes in `data/`, and streams transcriptions from the Claude API (`/api/transcribe`), with automatic server-side fallback if a request is declined.
-- `public/js/core.js`: fingering chart, tab data model, chord suggestion and best-key search.
-- `public/js/render.js`: draws the score with [abcjs](https://www.abcjs.net/), adds the tab rows, handles note-to-fingering highlighting and playback.
-- PDFs are rendered in the browser with [PDF.js](https://mozilla.github.io/pdf.js/). The page images are sent to Claude, which returns ABC notation. You can edit that notation in the editor before approving.
+- `public/`: the static site. `js/core.js` holds the fingering chart, tab data, chord suggestion and best-key search. `js/render.js` draws the score with [abcjs](https://www.abcjs.net/) plus the tab rows, highlighting and playback. PDFs are rendered in the browser with [PDF.js](https://mozilla.github.io/pdf.js/). Both libraries are bundled in `public/vendor/`.
+- `public/api/index.php` → `app/api.php`: the API (`?r=config`, `tunes`, `tunes/<id>`, `tunes/<id>/files/<file>`, `tunes/<id>/delete`, `transcribe`). Transcription streams from Claude through the official Anthropic PHP SDK, with server-side fallback if a request is declined.
+- `scripts/secrets.php`, `deploy.sh`, `dev.sh`: tooling.
 
 Transcription accuracy depends on scan quality. Always compare the tab with the original (the editor shows them side by side) before approving.

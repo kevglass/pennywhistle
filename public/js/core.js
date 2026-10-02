@@ -295,13 +295,23 @@ export function analyzeTune(tune) {
     key: ki.name,
     keySignature: keySignature ? { root: keySignature.root, acc: keySignature.acc, mode: keySignature.mode, accidentals: keySignature.accidentals } : null,
     meter: { num: meter.num, den: meter.den },
-    tempo: tune.metaText && tune.metaText.tempo ? tune.metaText.tempo : undefined,
+    tempo: tempoText(tune.metaText && tune.metaText.tempo),
     measures,
   };
   return { data, refs };
 }
 
 const round = (x) => Math.round(x * 1000) / 1000;
+
+/** Plain "1/4=100" text for a Q: field (abcjs's tempo object also holds drawing state). */
+function tempoText(t) {
+  if (!t || !t.bpm) return undefined;
+  const beat = (t.duration || [0.25]).map((d) => {
+    for (let den = 1; den <= 64; den *= 2) if (Math.abs(d * den - Math.round(d * den)) < 1e-9) return `${Math.round(d * den)}/${den}`;
+    return String(d);
+  }).join(' ');
+  return `${beat}=${t.bpm}`;
+}
 
 /** Summary of how well a tune suits a D whistle. */
 export function whistleStats(data, shift = 0) {

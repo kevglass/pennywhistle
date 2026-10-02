@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Penny Whistle Tabs</title>
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/css/app.css">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/app.css">
 </head>
 <body>
 <div id="top"></div>
@@ -17,18 +17,18 @@
     </div>
     <div class="row">
       <input type="search" id="q" placeholder="Search title, key, chord…" aria-label="Search tunes">
-      <a class="btn primary" href="/editor.html">+ New tab from sheet music</a>
+      <a class="btn primary" href="editor.html">+ New tab from sheet music</a>
     </div>
   </div>
   <div id="list" class="tune-grid" aria-live="polite"></div>
   <div id="empty" class="card empty" hidden>
     <h2>No tunes yet</h2>
     <p class="muted">Upload a PDF or photo of sheet music and Claude will turn it into penny whistle tab with guitar chords.</p>
-    <a class="btn primary" href="/editor.html">Create your first tab</a>
+    <a class="btn primary" href="editor.html">Create your first tab</a>
   </div>
 </main>
 <script type="module">
-import { $, api, esc, topbar } from '/js/ui.js';
+import { $, api, esc, topbar } from './js/ui.js';
 $('#top').innerHTML = topbar('library');
 let tunes = [];
 function draw() {
@@ -36,7 +36,7 @@ function draw() {
   const shown = tunes.filter((t) => !q || [t.title, t.composer, t.key, t.meter, ...(t.chords || [])].join(' ').toLowerCase().includes(q));
   $('#empty').hidden = tunes.length > 0;
   $('#list').innerHTML = shown.map((t) => `
-    <a class="tune-card" href="/tune.html?id=${encodeURIComponent(t.id)}">
+    <a class="tune-card" href="tune.html?id=${encodeURIComponent(t.id)}">
       <h3>${esc(t.title)}</h3>
       ${t.composer ? `<div class="muted small">${esc(t.composer)}</div>` : ''}
       <div class="badges">
@@ -51,7 +51,7 @@ function draw() {
     </a>`).join('') || (tunes.length ? '<p class="muted">No tunes match your search.</p>' : '');
 }
 $('#q').addEventListener('input', draw);
-try { tunes = await api('/api/tunes'); draw(); }
+try { tunes = await api('tunes'); draw(); }
 catch (e) { $('#list').innerHTML = `<p class="error">Could not load the library: ${esc(e.message)}</p>`; }
 </script>
 </body>

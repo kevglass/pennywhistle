@@ -1,7 +1,7 @@
 import { analyzeTune, buildDisplayAbc, bestTranspose, whistleStats, cleanAbc, tabDocument, transposedKeyName } from './core.js';
 import { TabView, Player, tone, defaultBpm } from './render.js';
-import { renderPages, pagesToImages, showPages, fileToBase64, ACCEPTED } from './originals.js';
-import { $, api, esc, topbar, renderNow, originalSources } from './ui.js';
+import { renderPages, pagesToImages, showPages, ACCEPTED } from './originals.js';
+import { $, api, apiUrl, esc, topbar, renderNow, originalSources } from './ui.js';
 
 $('#top').innerHTML = topbar('new');
 
@@ -231,7 +231,7 @@ $('#read').addEventListener('click', async () => {
   const clock = setInterval(tick, 1000);
   let text = '';
   try {
-    const res = await fetch('/api/transcribe', {
+    const res = await fetch(apiUrl('transcribe'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pages: pagesToImages(pages), hint: $('#hint').value }),
@@ -291,11 +291,12 @@ $('#save').addEventListener('click', async () => {
       tab: tabDocument(view.data, { generatedChords: lastGenerated }),
       transcription,
     };
-    if (files.length) body.originals = await Promise.all(files.map(async (f) => ({ name: f.name, type: f.type, data: await fileToBase64(f) })));
-    const rec = existing
-      ? await api(`/api/tunes/${encodeURIComponent(existing.id)}`, { method: 'PUT', body: JSON.stringify(body) })
-      : await api('/api/tunes', { method: 'POST', body: JSON.stringify(body) });
-    location.href = `/tune.html?id=${encodeURIComponent(rec.id)}`;
+    // multipart: JSON metadata plus the original files
+    const form = new FormData();
+    form.append('meta', JSON.stringify(body));
+    for (const f of files) form.append('originals[]', f, f.name);
+    const rec = await api(existing ? `tunes/${existing.id}` : 'tunes', { method: 'POST', body: form });
+    location.href = `tune.html?id=${encodeURIComponent(rec.id)}`;
   } catch (e) {
     alert('Could not save: ' + e.message);
     btn.disabled = false;
@@ -307,7 +308,7 @@ $('#save').addEventListener('click', async () => {
 
 (async () => {
   try {
-    const cfg = await api('/api/config');
+    const cfg = await api('config');
     window.__canTranscribe = cfg.transcribe;
     if (!cfg.transcribe) {
       $('#read').title = 'Set ANTHROPIC_API_KEY on the server to enable reading music';
@@ -317,10 +318,10 @@ $('#save').addEventListener('click', async () => {
 
   if (editId) {
     try {
-      existing = await api(`/api/tunes/${encodeURIComponent(editId)}`);
+      existing = await api(`tunes/${editId}`);
       document.title = `Edit ${existing.title}`;
       $('#heading').textContent = `Edit “${existing.title}”`;
-      $('#cancel').href = `/tune.html?id=${encodeURIComponent(existing.id)}`;
+      $('#cancel').href = `tune.html?id=${encodeURIComponent(existing.id)}`;
       $('#abc').value = existing.abc;
       $('#title').value = existing.title;
       $('#chords').value = existing.settings?.chordMode || 'auto';
