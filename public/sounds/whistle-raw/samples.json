@@ -1,7 +1,7 @@
 [
  {
   "file": "74.wav",
-  "v": "55c688e9e6",
+  "v": "c161ab72c5",
   "midi": 74,
   "loopStart": 0.25658,
   "loopEnd": 0.97701,
@@ -9,7 +9,7 @@
  },
  {
   "file": "75.wav",
-  "v": "02851ed4aa",
+  "v": "e2ada1d27b",
   "midi": 75,
   "loopStart": 0.24218,
   "loopEnd": 0.92057,
@@ -17,7 +17,7 @@
  },
  {
   "file": "76.wav",
-  "v": "7645a1847d",
+  "v": "228f339f7f",
   "midi": 76,
   "loopStart": 0.25884,
   "loopEnd": 1.20592,
@@ -25,7 +25,7 @@
  },
  {
   "file": "77.wav",
-  "v": "a6e13605bd",
+  "v": "50a70fdfd1",
   "midi": 77,
   "loopStart": 0.24431,
   "loopEnd": 1.13678,
@@ -33,55 +33,55 @@
  },
  {
   "file": "78.wav",
-  "v": "c8ca0abaa2",
+  "v": "052904f22a",
   "midi": 78,
-  "loopStart": 0.23061,
-  "loopEnd": 1.07163,
+  "loopStart": 0.23059,
+  "loopEnd": 1.07161,
   "source": "tin-whistle-e-key.wav"
  },
  {
   "file": "79.wav",
-  "v": "4d11533ba5",
+  "v": "14b31d0de5",
   "midi": 79,
-  "loopStart": 0.26025,
-  "loopEnd": 1.45485,
+  "loopStart": 0.26027,
+  "loopEnd": 1.45488,
   "source": "tin-whistle-g-key.wav"
  },
  {
   "file": "80.wav",
-  "v": "10da3e1db5",
+  "v": "2774e21c0f",
   "midi": 80,
-  "loopStart": 0.24565,
-  "loopEnd": 1.3732,
+  "loopStart": 0.24551,
+  "loopEnd": 1.37186,
   "source": "tin-whistle-g-key.wav"
  },
  {
   "file": "81.wav",
-  "v": "2828a402b3",
+  "v": "1e24a0f105",
   "midi": 81,
-  "loopStart": 0.26134,
-  "loopEnd": 1.37361,
+  "loopStart": 0.26132,
+  "loopEnd": 1.37472,
   "source": "tin-whistle-a-key.wav"
  },
  {
   "file": "82.wav",
-  "v": "a0b4d9dc4b",
+  "v": "45475c3445",
   "midi": 82,
-  "loopStart": 0.24667,
-  "loopEnd": 1.29327,
+  "loopStart": 0.24664,
+  "loopEnd": 1.2954,
   "source": "tin-whistle-a-key.wav"
  },
  {
   "file": "83.wav",
-  "v": "08bc3edf75",
+  "v": "dfef19cf3a",
   "midi": 83,
-  "loopStart": 0.23281,
-  "loopEnd": 1.22168,
+  "loopStart": 0.23279,
+  "loopEnd": 1.22166,
   "source": "tin-whistle-a-key.wav"
  },
  {
   "file": "84.wav",
-  "v": "c3cf0e6acc",
+  "v": "6bc4c2590f",
   "midi": 84,
   "loopStart": 0.2663,
   "loopEnd": 1.68088,
@@ -89,7 +89,7 @@
  },
  {
   "file": "85.wav",
-  "v": "8e0545469b",
+  "v": "cd73b91b31",
   "midi": 85,
   "loopStart": 0.25136,
   "loopEnd": 1.58476,
@@ -97,7 +97,7 @@
  },
  {
   "file": "86.wav",
-  "v": "7525d1e423",
+  "v": "51b65e16d2",
   "midi": 86,
   "loopStart": 0.24717,
   "loopEnd": 0.63909,
@@ -105,7 +105,7 @@
  },
  {
   "file": "87.wav",
-  "v": "d821ed2c76",
+  "v": "13ebf5c7a5",
   "midi": 87,
   "loopStart": 0.24431,
   "loopEnd": 0.6405,
@@ -113,7 +113,7 @@
  },
  {
   "file": "88.wav",
-  "v": "959129978f",
+  "v": "1493df9c6a",
   "midi": 88,
   "loopStart": 0.23061,
   "loopEnd": 0.60304,
@@ -121,7 +121,7 @@
  },
  {
   "file": "89.wav",
-  "v": "c1f3873ee9",
+  "v": "36d80f69f1",
   "midi": 89,
   "loopStart": 0.27057,
   "loopEnd": 1.38483,
@@ -129,7 +129,7 @@
  },
  {
   "file": "90.wav",
-  "v": "d1a2770d2d",
+  "v": "3a69bd172c",
   "midi": 90,
   "loopStart": 0.25537,
   "loopEnd": 1.30574,
@@ -137,7 +137,7 @@
  },
  {
   "file": "91.wav",
-  "v": "ae928462a7",
+  "v": "bbf4e92d40",
   "midi": 91,
   "loopStart": 0.25508,
   "loopEnd": 1.03868,
@@ -145,7 +145,7 @@
  },
  {
   "file": "92.wav",
-  "v": "269467b3a7",
+  "v": "a124f722cc",
   "midi": 92,
   "loopStart": 0.24077,
   "loopEnd": 0.97918,
@@ -153,7 +153,7 @@
  },
  {
   "file": "93.wav",
-  "v": "f2ddba29f6",
+  "v": "2ac14a56eb",
   "midi": 93,
   "loopStart": 0.2556,
   "loopEnd": 0.94825,
@@ -161,7 +161,7 @@
  },
  {
   "file": "94.wav",
-  "v": "bedaba76ec",
+  "v": "f74f0d1ac3",
   "midi": 94,
   "loopStart": 0.24125,
   "loopEnd": 0.8934,
@@ -169,7 +169,7 @@
  },
  {
   "file": "95.wav",
-  "v": "a72ba69cb3",
+  "v": "05bab18b1b",
   "midi": 95,
   "loopStart": 0.25029,
   "loopEnd": 0.85889,
@@ -177,7 +177,7 @@
  },
  {
   "file": "96.wav",
-  "v": "5744506215",
+  "v": "06bc568b63",
   "midi": 96,
   "loopStart": 0.23626,
   "loopEnd": 0.80828,
@@ -185,15 +185,15 @@
  },
  {
   "file": "97.wav",
-  "v": "ff4b1eefd1",
+  "v": "354418dfb0",
   "midi": 97,
   "loopStart": 0.22299,
-  "loopEnd": 0.76154,
+  "loopEnd": 0.762,
   "source": "thin-whistle-high-b-key.wav"
  },
  {
   "file": "98.wav",
-  "v": "a40994e7f0",
+  "v": "0fdeef88b1",
   "midi": 98,
   "loopStart": 0.21048,
   "loopEnd": 0.7171,

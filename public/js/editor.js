@@ -34,7 +34,6 @@ K:G
 const params = new URLSearchParams(location.search);
 const editId = params.get('id');
 let existing = null;
-let files = []; // newly chosen File objects (replace originals on save)
 let pages = []; // rendered canvases of the current original music
 let lastDisplay = '';
 let lastGenerated = false;
@@ -205,9 +204,10 @@ async function loadPages(sources) {
 function chooseFiles(list) {
   const chosen = [...list];
   const bad = chosen.filter((f) => !ACCEPTED.includes(f.type));
-  files = chosen.filter((f) => ACCEPTED.includes(f.type));
   if (bad.length) $('#status').innerHTML = `<span class="error">Skipped unsupported file(s): ${bad.map((f) => esc(f.name)).join(', ')}. Use PDF, PNG, JPG or WebP.</span>`;
-  if (files.length) loadPages(files);
+  // The pages are only needed while transcribing; they aren't saved with the tune.
+  const accepted = chosen.filter((f) => ACCEPTED.includes(f.type));
+  if (accepted.length) loadPages(accepted);
 }
 const drop = $('#drop');
 drop.addEventListener('click', () => $('#file').click());
@@ -300,14 +300,14 @@ $('#save').addEventListener('click', async () => {
       tab: tabDocument(view.data, { generatedChords: lastGenerated }),
       transcription,
     };
-    // multipart: JSON metadata plus the original files
-    const form = new FormData();
-    form.append('meta', JSON.stringify(body));
-    for (const f of files) form.append('originals[]', f, f.name);
-    const rec = await api(existing ? `tunes/${existing.id}` : 'tunes', { method: 'POST', body: form });
+    const rec = await api(existing ? `tunes/${existing.id}` : 'tunes', { method: 'POST', body: JSON.stringify(body) });
     location.href = `tune.html?id=${encodeURIComponent(rec.id)}`;
   } catch (e) {
-    alert('Could not save: ' + e.message);
+    // fetch() throws a TypeError when the request never got a response
+    const msg = e instanceof TypeError
+      ? `the request did not reach the server (${e.message}). Check your connection and try again.`
+      : e.message;
+    alert('Could not save: ' + msg);
     btn.disabled = false;
     btn.textContent = 'Approve & save';
   }

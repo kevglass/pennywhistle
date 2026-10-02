@@ -1,6 +1,6 @@
 // "Download PDF": the score with the whistle number tab under every line (vector),
 // and guitar chord diagrams. Built in the browser with jsPDF + svg2pdf.
-import { TabView, beatsLabel, getTabStyle } from './render.js';
+import { TabView, beatsLabel, getTabStyle, getShowNoteNames } from './render.js';
 import { fingerNumbers, markFor } from './core.js';
 import { chordDiagramSVG } from './guitar.js';
 
@@ -35,41 +35,42 @@ const pdfText = (s) => String(s ?? '')
 
 /** Draw one tab row (numbers or hole diagrams, plus note-length bars) into an SVG. */
 function drawTabRow(svg, view, box, width) {
-  const y0 = box.tabTop;
+  const top = box.tabTop;
   const bottom = box.bottom;
-  svg.appendChild(el('line', { x1: 0, y1: y0, x2: width, y2: y0, stroke: C.faint, 'stroke-width': 0.7, 'stroke-dasharray': '3 3' }));
+  svg.appendChild(el('line', { x1: 0, y1: top, x2: width, y2: top, stroke: C.faint, 'stroke-width': 0.7, 'stroke-dasharray': '3 3' }));
   const holesStyle = getTabStyle() === 'holes';
+  const names = getShowNoteNames();
+  const y0 = top + (names ? 12 : 0); // fingerings sit below the optional note names
   const font = { 'font-family': 'helvetica', 'text-anchor': 'middle' };
   for (const r of box.refs) {
     const it = r.item;
     if (r.tabX == null || it.invisible) continue;
     const x = r.tabX;
-    const upper = it.type === 'note' && it.register > 1;
     if (it.type === 'note') {
-      svg.appendChild(el('text', { ...font, x, y: y0 + 12, 'font-size': 9, 'font-weight': 'bold', fill: upper ? C.upper : C.muted }, pdfText(it.name)));
+      if (names) svg.appendChild(el('text', { ...font, x, y: top + 12, 'font-size': 9, 'font-weight': 'bold', fill: it.register > 1 ? C.upper : C.muted }, pdfText(it.name)));
       if (holesStyle) {
         [...it.holes].forEach((h, i) => {
-          const cy = y0 + 22 + i * 10.6 + (i >= 3 ? 5 : 0);
+          const cy = y0 + 10 + i * 10.6 + (i >= 3 ? 5 : 0);
           svg.appendChild(el('circle', { cx: x, cy, r: 4.4, fill: h === 'X' ? C.ink : '#ffffff', stroke: C.ink, 'stroke-width': 1.1 }));
           if (h === 'H') svg.appendChild(el('path', { d: `M ${x} ${cy - 4.4} A 4.4 4.4 0 0 0 ${x} ${cy + 4.4} Z`, fill: C.ink }));
         });
-        if (markFor(it.holes, it.register)) svg.appendChild(el('text', { ...font, x, y: y0 + 98, 'font-size': 14, 'font-weight': 'bold', fill: C.upper }, markFor(it.holes, it.register)));
+        if (markFor(it.holes, it.register)) svg.appendChild(el('text', { ...font, x, y: y0 + 86, 'font-size': 14, 'font-weight': 'bold', fill: C.upper }, markFor(it.holes, it.register)));
       } else {
-        const t = el('text', { ...font, x, y: y0 + 31, 'font-size': 14, 'font-weight': 'bold', fill: C.ink });
+        const t = el('text', { ...font, x, y: y0 + 19, 'font-size': 14, 'font-weight': 'bold', fill: C.ink });
         const tok = fingerNumbers(it.holes);
         const m = tok.match(/^0\/(.+)$/);
         if (m) {
-          t.appendChild(el('tspan', { 'font-size': 9.5, fill: C.warn }, '0/'));
+          t.appendChild(el('tspan', { fill: C.warn }, '0/'));
           t.appendChild(el('tspan', {}, pdfText(m[1])));
         } else t.appendChild(el('tspan', {}, pdfText(tok)));
         if (markFor(it.holes, it.register)) t.appendChild(el('tspan', { fill: C.upper }, markFor(it.holes, it.register)));
         svg.appendChild(t);
       }
     } else {
-      svg.appendChild(el('text', { ...font, x, y: y0 + (holesStyle ? 50 : 30), 'font-size': 9, 'font-style': 'italic', fill: C.muted }, it.type === 'rest' ? 'rest' : 'hold'));
+      svg.appendChild(el('text', { ...font, x, y: y0 + (holesStyle ? 38 : 18), 'font-size': 9, 'font-style': 'italic', fill: C.muted }, it.type === 'rest' ? 'rest' : 'hold'));
     }
     // note length bar
-    const by = holesStyle ? bottom - 6 : y0 + 44;
+    const by = holesStyle ? bottom - 6 : y0 + 32;
     const color = it.type === 'rest' ? C.muted : C.accent;
     const x2 = Math.max(x + 4, r.tabNext - 2);
     svg.appendChild(el('line', { x1: x - 6, y1: by - 5, x2: x - 6, y2: by + 5, stroke: color, 'stroke-width': 1.4 }));

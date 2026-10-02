@@ -1,4 +1,4 @@
-import { holesSVG, beatsLabel, getTabStyle, setTabStyle } from './render.js';
+import { holesSVG, beatsLabel, getTabStyle, setTabStyle, getShowNoteNames, setShowNoteNames, getSoundSet, setSoundSet } from './render.js';
 import { fingerNumbers, markFor } from './core.js';
 import { chordDiagramSVG } from './guitar.js';
 
@@ -59,10 +59,18 @@ export function renderChordList(el, names) {
 
 /** "Tab: Numbers | Hole diagrams" switch. onChange re-renders the tab. */
 export function tabStyleControl(el, onChange) {
-  el.innerHTML = `<label for="tab-style">Tab</label> <select id="tab-style"><option value="numbers">Numbers</option><option value="holes">Hole diagrams</option></select>`;
+  el.innerHTML = `<label for="tab-style">Tab</label> <select id="tab-style"><option value="numbers">Numbers</option><option value="holes">Hole diagrams</option></select>
+    <label class="small check"><input type="checkbox" id="note-names"> Note names</label>
+    <label for="sound-set">Sound</label> <select id="sound-set"><option value="clean">Cleaned</option><option value="raw">Raw</option></select>`;
   const sel = el.querySelector('select');
   sel.value = getTabStyle();
   sel.addEventListener('change', () => { setTabStyle(sel.value); onChange(); });
+  const names = el.querySelector('#note-names');
+  names.checked = getShowNoteNames();
+  names.addEventListener('change', () => { setShowNoteNames(names.checked); onChange(); });
+  const set = el.querySelector('#sound-set');
+  set.value = getSoundSet();
+  set.addEventListener('change', () => setSoundSet(set.value)); // swaps in once loaded; no re-render needed
 }
 
 // ---- light / dark theme (light by default; the choice is remembered)

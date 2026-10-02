@@ -3,7 +3,7 @@
 import { analyzeTune, fingerNumbers, markFor } from './core.js';
 
 // vertical room reserved under each system for the tab row
-const tabHeight = () => (getTabStyle() === 'holes' ? 132 : 78);
+const tabHeight = () => (getTabStyle() === 'holes' ? 117 : 63) + (getShowNoteNames() ? 15 : 0);
 
 const FRACTIONS = { 0.25: '¼', 0.333: '⅓', 0.5: '½', 0.667: '⅔', 0.75: '¾', 0.125: '⅛', 0.167: '⅙' };
 export function beatsLabel(b) {
@@ -43,6 +43,10 @@ export function countHTML(holes, register = 1) {
 const TAB_STYLE_KEY = 'pw-tab-style';
 export function getTabStyle() { try { return localStorage.getItem(TAB_STYLE_KEY) || 'numbers'; } catch { return 'numbers'; } }
 export function setTabStyle(v) { try { localStorage.setItem(TAB_STYLE_KEY, v); } catch { /* storage blocked */ } }
+// optional note names above the fingerings (off by default)
+const NOTE_NAMES_KEY = 'pw-note-names';
+export function getShowNoteNames() { try { return localStorage.getItem(NOTE_NAMES_KEY) === '1'; } catch { return false; } }
+export function setShowNoteNames(on) { try { localStorage.setItem(NOTE_NAMES_KEY, on ? '1' : '0'); } catch { /* storage blocked */ } }
 
 const registerMark = (it) => markFor(it.holes, it.register);
 
@@ -85,6 +89,8 @@ export class TabView {
 
     const TAB_H = tabHeight();
     this.tabH = TAB_H;
+    const names = getShowNoteNames();
+    const spacer = names ? '<span class="nn">&nbsp;</span>' : '';
     const { data, refs } = analyzeTune(visual);
     this.data = data;
     this.refs = refs;
@@ -173,13 +179,13 @@ export class TabView {
           const fingering = getTabStyle() === 'holes'
             ? `${holesSVG(it.holes)}<span class="reg">${registerMark(it) || '&nbsp;'}</span>`
             : countHTML(it.holes, it.register);
-          cell.innerHTML = `<span class="nn">${it.name.replace('#', '♯').replace(/b$/, '♭')}</span>${fingering}${shift}`;
+          cell.innerHTML = `${names ? `<span class="nn">${it.name.replace('#', '♯').replace(/b$/, '♭')}</span>` : ''}${fingering}${shift}`;
           cell.setAttribute('aria-label', `${it.pitch}, cover ${fingerNumbers(it.holes, it.register)}, ${len} beats${it.register > 1 ? ', blow harder' : ''}`);
         } else if (it.type === 'rest') {
-          cell.innerHTML = `<span class="nn">&nbsp;</span><span class="rest-mark">rest</span>`;
+          cell.innerHTML = `${spacer}<span class="rest-mark">rest</span>`;
           cell.setAttribute('aria-label', `Rest, ${len} beats`);
         } else {
-          cell.innerHTML = `<span class="nn">&nbsp;</span><span class="hold-mark">hold</span>`;
+          cell.innerHTML = `${spacer}<span class="hold-mark">hold</span>`;
           cell.setAttribute('aria-label', `Keep holding, ${len} beats`);
         }
         cell.addEventListener('click', (e) => { e.stopPropagation(); this.select(r.index, { source: 'tab' }); });
@@ -312,21 +318,34 @@ function wave(a) {
 // Recorded tin-whistle notes, prepared by scripts/prepare-samples.py into
 // public/sounds/whistle/: samples.json lists each file's measured pitch (fractional
 // MIDI) and loop points. Every note is played from the nearest recording, retuned.
-const SAMPLE_DIR = new URL('../sounds/whistle/', import.meta.url);
-const samples = []; // { midi, loopStart, loopEnd, buffer }, sorted by pitch
-let samplesLoading = null, samplesReady = false;
+// Two sets from the same recordings: 'clean' (noise, overtones and wobble tidied) and
+// 'raw' (only trimmed, levelled, retuned and looped), switchable in the player to compare.
+const SOUND_SET_KEY = 'pw-sound-set';
+const SOUND_DIRS = { clean: '../sounds/whistle/', raw: '../sounds/whistle-raw/' };
+export function getSoundSet() { try { return SOUND_DIRS[localStorage.getItem(SOUND_SET_KEY)] ? localStorage.getItem(SOUND_SET_KEY) : 'clean'; } catch { return 'clean'; } }
+export function setSoundSet(v) {
+  try { localStorage.setItem(SOUND_SET_KEY, v); } catch { /* storage blocked */ }
+  samplesLoading = null;
+  loadSamples();
+}
+let samples = []; // { midi, loopStart, loopEnd, buffer }, sorted by pitch
+let samplesLoading = null, samplesReady = false, loadGen = 0;
 export function loadSamples() {
   if (!samplesLoading) {
+    const gen = ++loadGen;
+    const dir = new URL(SOUND_DIRS[getSoundSet()], import.meta.url);
     const decoder = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 44100);
-    const get = (name) => fetch(new URL(name, SAMPLE_DIR)).then((r) => (r.ok ? r : Promise.reject(new Error(`${name}: ${r.status}`))));
-    samplesLoading = get('samples.json').then((r) => r.json())
-      .then((list) => Promise.all(list.map((s) => get(s.file)
+    const get = (name, opts) => fetch(new URL(name, dir), opts).then((r) => (r.ok ? r : Promise.reject(new Error(`${name}: ${r.status}`))));
+    const next = [];
+    // the manifest is always revalidated; each file's ?v= changes whenever its content does
+    samplesLoading = get('samples.json', { cache: 'no-cache' }).then((r) => r.json())
+      .then((list) => Promise.all(list.map((s) => get(s.v ? `${s.file}?v=${s.v}` : s.file)
         .then((r) => r.arrayBuffer())
         .then((b) => decoder.decodeAudioData(b))
-        .then((buffer) => { samples.push({ ...s, buffer }); })
+        .then((buffer) => { next.push({ ...s, buffer }); })
         .catch(() => { /* a missing file just leaves a gap the others cover */ }))))
-      .then(() => samples.sort((x, y) => x.midi - y.midi))
-      .catch(() => { /* no samples: the synth is used */ })
+      .then(() => { if (gen === loadGen && next.length) samples = next.sort((x, y) => x.midi - y.midi); })
+      .catch(() => { /* no samples: the synth (or the previous set) is used */ })
       .finally(() => { samplesReady = true; });
   }
   return samplesLoading;
@@ -343,30 +362,115 @@ function nearestSample(midi) {
  * A penny-whistle note. Uses the nearest recorded note, retuned, once they have loaded;
  * otherwise a synthesized tone. A D whistle sounds an octave above the written pitch.
  */
-export function tone(midi, start, dur, level = 0.2, context = null) {
+export function tone(midi, start, dur, level = 0.2, context = null, { fadeIn = 0, fadeOut = 0 } = {}) {
   const a = context || audio(); // context: e.g. an OfflineAudioContext for rendering
   const t0 = Math.max(start ?? a.currentTime, a.currentTime);
-  const end = t0 + Math.max(0.07, dur - 0.025); // tiny gap so repeated notes are tongued
   const s = nearestSample(midi + 12);
-  if (s) sampleTone(a, s, midi + 12, t0, end, level);
-  else synthTone(a, midi, t0, end, dur, level);
+  if (s) sampleTone(a, s, midi + 12, t0, t0 + dur, level, fadeIn, fadeOut);
+  else synthTone(a, midi, t0, t0 + Math.max(0.07, dur - 0.025), dur, level);
 }
 
-function sampleTone(a, s, target, t0, end, level) {
+// Output chain for the samples: a gentle top-end roll-off (tames squeak) and a little
+// small-room reverb, since a completely dry sample sounds electronic.
+const masters = new WeakMap();
+function master(a) {
+  let m = masters.get(a);
+  if (!m) {
+    m = a.createBiquadFilter();
+    m.type = 'lowpass';
+    m.frequency.value = 8000;
+    m.Q.value = 0.5;
+    m.connect(a.destination);
+    const room = a.createConvolver();
+    room.buffer = roomImpulse(a);
+    const wet = a.createGain();
+    wet.gain.value = 0.22;
+    m.connect(room).connect(wet).connect(a.destination);
+    masters.set(a, m);
+  }
+  return m;
+}
+
+/** Impulse response of a small, soft room: decaying noise with a short pre-delay. */
+function roomImpulse(a) {
+  const sr = a.sampleRate, len = Math.floor(sr * 0.9), pre = Math.floor(sr * 0.012);
+  const buf = a.createBuffer(2, len, sr);
+  for (let c = 0; c < 2; c++) {
+    const d = buf.getChannelData(c);
+    let lp = 0;
+    for (let i = pre; i < len; i++) {
+      const t = (i - pre) / sr;
+      lp += 0.35 * ((Math.random() * 2 - 1) - lp); // darken the tail like soft furnishings
+      d[i] = lp * Math.exp(-t / 0.16);
+    }
+  }
+  return buf;
+}
+
+// Equal-power fade curves, so a crossfade between two notes keeps a steady loudness.
+const SLUR = 0.09; // crossfade between different notes, seconds
+const REPEAT_DIP = 0.03; // shorter crossfade on a repeated note: a soft re-tongue
+const CURVE = 64;
+const fadeCurve = (vol, up) => Float32Array.from({ length: CURVE }, (_, i) => vol * (up ? Math.sin : Math.cos)((i / (CURVE - 1)) * Math.PI / 2));
+
+/**
+ * Play one sampled note from t0 to `end`. fadeIn > 0: the note joins the previous one in
+ * the same breath, so it skips the recorded attack (starting in the steady part) and fades
+ * in over that many seconds, centred on t0. fadeOut > 0: it fades out the same way into
+ * the next note. 0 means tongued: the note starts with its (softened) attack, or ends with
+ * a short release and a small gap.
+ */
+function sampleTone(a, s, target, t0, end, level, fadeIn, fadeOut) {
   const src = a.createBufferSource();
   src.buffer = s.buffer;
   src.playbackRate.value = Math.pow(2, (target - s.midi) / 12);
   src.loop = true; // the loop has a crossfade baked in, so held notes sustain smoothly
   src.loopStart = s.loopStart;
   src.loopEnd = s.loopEnd;
+  // samples are normalized to an RMS of 0.2; high notes sound louder and shriller, so ease
+  // them down. A little random variation keeps repeated notes from sounding mechanical.
+  const vol = level * 2.5 * Math.pow(10, (-0.3 * Math.max(0, target - 74) + (Math.random() - 0.5) * 1.5) / 20);
+  src.detune.value = (Math.random() - 0.5) * 8; // within +-4 cents, as a player's pitch drifts
+  const len = end - t0;
+  const fi = Math.min(fadeIn, len * 0.8), fo = Math.min(fadeOut, len * 0.8);
   const g = a.createGain();
-  const vol = level * 2.5; // samples are normalized to an RMS of 0.2
-  g.gain.setValueAtTime(vol, t0);
-  g.gain.setValueAtTime(vol, Math.max(t0, end - 0.03));
-  g.gain.exponentialRampToValueAtTime(0.0001, end);
-  src.connect(g).connect(a.destination);
-  src.start(t0);
-  src.stop(end + 0.05);
+  let start, free; // free: when the fade-in's automation ends (events must not overlap)
+  if (fi > 0) {
+    start = Math.max(a.currentTime, t0 - fi / 2);
+    free = t0 + fi / 2;
+    g.gain.setValueCurveAtTime(fadeCurve(vol, true), start, free - start);
+  } else {
+    start = t0;
+    free = start + Math.min(0.012, len * 0.3);
+    g.gain.setValueAtTime(0, start);
+    g.gain.linearRampToValueAtTime(vol, free); // soften the attack's chiff
+  }
+  let stop;
+  if (fo > 0) {
+    const from = Math.max(free + 0.001, end - fo / 2);
+    stop = Math.max(from + 0.01, end + fo / 2);
+    g.gain.setValueCurveAtTime(fadeCurve(vol, false), from, stop - from);
+  } else {
+    const release = Math.min(0.08, Math.max(0.03, len / 4));
+    stop = Math.max(free + 0.03, end - 0.02); // a small gap, as when the tongue stops the air
+    g.gain.setValueAtTime(vol, Math.max(free + 0.001, stop - release));
+    g.gain.exponentialRampToValueAtTime(0.0001, stop);
+  }
+  // gentle vibrato that a player adds to longer notes, eased in after the note settles
+  if (len > 0.35) {
+    const vib = a.createOscillator();
+    vib.frequency.value = 5 + Math.random();
+    const depth = a.createGain();
+    depth.gain.setValueAtTime(0, t0);
+    depth.gain.setValueAtTime(0, t0 + 0.2);
+    depth.gain.linearRampToValueAtTime(10, Math.min(end, t0 + 0.6)); // cents
+    vib.connect(depth).connect(src.detune);
+    vib.start(t0);
+    vib.stop(stop + 0.02);
+  }
+  src.connect(g).connect(master(a));
+  src.start(start, fi > 0 ? s.loopStart : 0);
+  src.stop(stop + 0.02);
 }
 
 /** Synthesized fallback: a pure, slightly breathy tone with an air "chiff",
@@ -467,14 +571,23 @@ export class Player {
       if (it.type === 'note') {
         // extend through following tied "hold" items
         let sound = dur;
-        for (let j = k + 1; j < order.length && v.items[order[j]].type === 'hold'; j++) sound += (v.items[order[j]].beats / den) * wholeSec;
-        tone(it.midi, t, sound);
+        let j = k + 1;
+        for (; j < order.length && v.items[order[j]].type === 'hold'; j++) sound += (v.items[order[j]].beats / den) * wholeSec;
+        // one breath: notes flow into each other (a quick soft dip on repeated notes);
+        // only the start of a phrase, after a rest, gets the tongued attack
+        const prev = k > 0 ? v.items[order[k - 1]] : null;
+        const next = j < order.length ? v.items[order[j]] : null;
+        const join = (other) => (other.midi === it.midi ? REPEAT_DIP : SLUR);
+        tone(it.midi, t, sound, undefined, null, {
+          fadeIn: prev && prev.type !== 'rest' ? join(prev) : 0,
+          fadeOut: next && next.type === 'note' ? join(next) : 0,
+        });
       }
       const delay = (t - t0) * 1000 + 120;
       if (!it.invisible) this.timers.push(setTimeout(() => v.select(idx, { source: 'play', scroll: true }), delay));
       t += dur;
     });
-    this.timers.push(setTimeout(() => this.stop(), (t - t0) * 1000 + 300));
+    this.timers.push(setTimeout(() => this.stop(), (t - t0) * 1000 + 1000)); // let the room ring out
   }
 
   stop() {
