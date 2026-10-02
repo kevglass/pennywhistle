@@ -128,6 +128,14 @@ details > summary { cursor: pointer; font-weight: 600; }
 .cell .shift { font-size: 9px; color: var(--warn); font-weight: 700; }
 .cell.upper .nn { color: var(--upper); }
 .cell.half .nn { text-decoration: underline dotted var(--warn); }
+.digits { display: flex; flex-direction: column; align-items: center; font-size: 11.5px; line-height: 10.6px; font-variant-numeric: tabular-nums; min-height: 69px; }
+.digits b { font-weight: 800; }
+.digits b.half { color: var(--warn); font-size: 9px; }
+.digits i { font-style: normal; color: var(--muted); opacity: .55; }
+.digits > :nth-child(4) { margin-top: 5px; }
+.cell.active .digits b { color: var(--hi); }
+.now .fingers { font: 800 1.35rem/1.1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; color: var(--hi); }
+.tabtext { margin: 0; padding: 14px; background: var(--surface-2); border-radius: 8px; overflow-x: auto; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }
 .holes .h-closed { fill: var(--hole); }
 .holes .h-open { fill: var(--hole-open); stroke: var(--hole); stroke-width: 1.3; }
 .holes .h-half { fill: var(--hole); }

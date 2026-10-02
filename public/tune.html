@@ -19,6 +19,7 @@
     <div class="actions">
       <button class="btn" id="toggle-original" aria-pressed="false" hidden>Show original music</button>
       <a class="btn" id="edit" href="#">Edit</a>
+      <a class="btn primary" id="txt" href="#" download>Download tab (.txt)</a>
       <a class="btn" id="json" href="#" download>Download JSON</a>
       <button class="btn" id="print" type="button">Print</button>
       <button class="btn danger" id="delete" type="button">Delete</button>
@@ -32,6 +33,7 @@
         <div class="controls">
           <button class="btn" id="play" type="button">▶ Play</button>
           <label for="tempo">Tempo</label><input type="range" id="tempo" min="30" max="220" value="90"><span id="tempo-v" class="small">90</span>
+          <span id="style" class="small"></span>
           <label class="small"><input type="checkbox" id="sound" checked> Sound on click</label>
         </div>
         <div class="now" id="now"></div>
@@ -41,6 +43,13 @@
     </div>
   </div>
 
+  <section class="card stack" style="margin-top:16px" aria-labelledby="h-text">
+    <div class="approve-bar">
+      <h2 id="h-text" style="margin:0">Whistle tab (text)</h2>
+      <div class="row no-print"><button class="btn" id="copy" type="button">Copy</button></div>
+    </div>
+    <pre id="tabtext" class="tabtext"></pre>
+  </section>
   <section class="card stack" style="margin-top:16px">
     <h2>Guitar chords in this tune</h2>
     <div id="chords" class="chord-list"></div>
@@ -52,10 +61,10 @@
 </main>
 
 <script type="module">
-import { buildDisplayAbc } from './js/core.js';
+import { buildDisplayAbc, tabDocument, tabText } from './js/core.js';
 import { TabView, Player, tone, defaultBpm } from './js/render.js';
 import { renderPages, showPages } from './js/originals.js';
-import { $, api, esc, topbar, renderNow, renderChordList, renderLegend, originalSources } from './js/ui.js';
+import { $, api, esc, topbar, renderNow, renderChordList, renderLegend, originalSources, tabStyleControl } from './js/ui.js';
 
 $('#top').innerHTML = topbar();
 renderLegend($('#legend'));
@@ -109,6 +118,18 @@ try {
   displayAbc = tune.displayAbc || buildDisplayAbc(tune.abc, tune.settings || {}).abc;
   view.render(displayAbc);
   renderChordList($('#chords'), t.chordsUsed || []);
+  tabStyleControl($('#style'), () => view.render(displayAbc));
+  // Text tab, built from the rendered tune so older saves get it too.
+  const doc = tabDocument(view.data, { generatedChords: (t.measures || []).some((m) => m.chords?.some((c) => c.source === 'generated')) });
+  const text = tabText(doc, { title: tune.title, composer: tune.composer });
+  $('#tabtext').textContent = text;
+  $('#txt').href = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+  $('#txt').download = `${tune.id}-whistle-tab.txt`;
+  $('#copy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(text); $('#copy').textContent = 'Copied'; }
+    catch { $('#copy').textContent = 'Select the text to copy'; }
+    setTimeout(() => { $('#copy').textContent = 'Copy'; }, 1800);
+  });
   $('#tempo').value = defaultBpm(view.visual);
   $('#tempo-v').textContent = $('#tempo').value;
 

@@ -160,6 +160,13 @@ function tune_record(array $body, ?array $existing): array
     ], fn ($v) => $v !== null);
 }
 
+/** tune.abc (the displayed notation) and tune.txt (the number tab) beside tune.json. */
+function save_side_files(string $dir, array $rec, array $meta): void
+{
+    file_put_contents("$dir/tune.abc", $rec['displayAbc'] ?? $rec['abc']);
+    if (is_string($meta['tabText'] ?? null) && $meta['tabText'] !== '') file_put_contents("$dir/tune.txt", $meta['tabText']);
+}
+
 function meta_from_request(): array
 {
     // Saves arrive as multipart/form-data: a JSON "meta" field plus originals[] files.
@@ -331,12 +338,13 @@ function handle(): never
     }
 
     if ($id === null && $method === 'POST') {
-        $rec = tune_record(meta_from_request(), null);
+        $meta = meta_from_request();
+        $rec = tune_record($meta, null);
         $rec['id'] = slug($rec['title']) . '-' . bin2hex(random_bytes(3));
         $dir = TUNES_DIR . '/' . $rec['id'];
         mkdir($dir, 0775, true);
         $rec['originals'] = save_originals($dir);
-        file_put_contents("$dir/tune.abc", $rec['displayAbc'] ?? $rec['abc']);
+        save_side_files($dir, $rec, $meta);
         write_json_atomic("$dir/tune.json", $rec);
         send_json(201, $rec);
     }
@@ -360,13 +368,14 @@ function handle(): never
     }
     if ($action === '' && $method === 'GET') send_json(200, $existing);
     if ($action === '' && $method === 'POST') { // update (POST for compatibility with simple hosts)
-        $rec = tune_record(meta_from_request(), $existing);
+        $meta = meta_from_request();
+        $rec = tune_record($meta, $existing);
         $new = save_originals($dir);
         if ($new) {
             foreach ($existing['originals'] as $o) if (!in_array($o['file'], array_column($new, 'file'), true)) @unlink("$dir/{$o['file']}");
             $rec['originals'] = $new;
         }
-        file_put_contents("$dir/tune.abc", $rec['displayAbc'] ?? $rec['abc']);
+        save_side_files($dir, $rec, $meta);
         write_json_atomic("$dir/tune.json", $rec);
         send_json(200, $rec);
     }

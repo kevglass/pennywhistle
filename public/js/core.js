@@ -48,6 +48,20 @@ export function whistleFingering(midi) {
   };
 }
 
+/**
+ * Number tab for a fingering: the holes to cover, 1 (top, nearest the mouthpiece)
+ * to 6 (bottom). "0" = all open, "½" after a digit = half-cover that hole,
+ * "+" = blow harder (second octave), "++" = third octave.
+ */
+export function fingerNumbers(holes, register = 1) {
+  let s = '';
+  [...holes].forEach((c, i) => {
+    if (c === 'X') s += i + 1;
+    else if (c === 'H') s += `${i + 1}½`;
+  });
+  return (s || '0') + (register === 3 ? '++' : register === 2 ? '+' : '');
+}
+
 // ------------------------------------------------------------ note names
 
 const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -414,7 +428,7 @@ export function tabDocument(data, { generatedChords }) {
     items: m.items.map((it) => {
       const o = { type: it.type, beats: it.beats, pos: it.pos };
       if (it.type === 'note') {
-        Object.assign(o, { pitch: it.pitch, midi: it.midi, holes: it.holes, register: it.register });
+        Object.assign(o, { pitch: it.pitch, fingers: fingerNumbers(it.holes, it.register), midi: it.midi, holes: it.holes, register: it.register });
         for (const k of ['octaveShift', 'halfHole', 'cross', 'hard']) if (it[k]) o[k] = it[k];
       }
       if (it.tie) o.tie = true;
@@ -424,7 +438,8 @@ export function tabDocument(data, { generatedChords }) {
   }));
   return {
     instrument: 'D tin whistle',
-    holesLegend: 'Holes listed top (nearest mouthpiece) to bottom. X = covered, O = open, H = half-covered. register 2 = blow harder (second octave).',
+    fingersLegend: 'fingers = holes to cover, 1 (top, nearest the mouthpiece) to 6 (bottom); 0 = all open; ½ after a digit = half-cover that hole; + = blow harder (second octave).',
+    holesLegend: 'holes = the same fingering as six symbols, top to bottom: X = covered, O = open, H = half-covered. register 2 = blow harder (second octave).',
     beatsUnit: `1/${data.meter.den} note`,
     key: data.key,
     meter: `${data.meter.num}/${data.meter.den}`,
@@ -442,4 +457,61 @@ export function transposedKeyName(keySignature, n) {
   const names = minor ? ['Cm', 'C#m', 'Dm', 'Ebm', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'Bbm', 'Bm'] : ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
   const mode = ki.name.includes(' ') ? ki.name.slice(ki.name.indexOf(' ')) : '';
   return names[pc] + mode;
+}
+
+// ------------------------------------------------------------ text tab
+
+const FRAC = { 0.25: '¼', 0.333: '⅓', 0.5: '½', 0.667: '⅔', 0.75: '¾', 0.125: '⅛', 0.167: '⅙' };
+function lengthLabel(b) {
+  const r = Math.round(b * 1000) / 1000;
+  const whole = Math.floor(r + 1e-6);
+  const frac = Math.round((r - whole) * 1000) / 1000;
+  if (!frac) return String(whole);
+  return (whole || '') + (FRAC[frac] || frac.toFixed(2).replace(/^0/, ''));
+}
+
+/**
+ * Plain-text penny whistle tab from a tabDocument(): guitar chords above,
+ * finger numbers below, bar lines, lengths in brackets when not one beat.
+ */
+export function tabText(doc, { title = '', composer = '', barsPerLine = 4 } = {}) {
+  const tok = (it) => {
+    const len = Math.abs(it.beats - 1) < 1e-6 ? '' : `(${lengthLabel(it.beats)})`;
+    if (it.type === 'rest') return 'R' + len;
+    if (it.type === 'hold') return '~' + len;
+    return it.fingers + (it.tie ? '~' : '') + len;
+  };
+  const lines = [];
+  const head = [title ? `${title} - D tin whistle tab` : 'D tin whistle tab'];
+  if (composer) head.push(composer);
+  head.push(`Key: ${doc.key}   Time: ${doc.meter}   1 beat = 1/${doc.meter.split('/')[1]} note${doc.tempo ? `   Tempo: ${doc.tempo}` : ''}`);
+  head.push('');
+  head.push('How to read: numbers are the holes to cover, 1 (top, nearest the mouthpiece) to 6 (bottom).');
+  head.push('  0 = all holes open    + = blow harder (2nd octave)    ½ after a number = half-cover that hole');
+  head.push('  (2) = length in beats, no brackets = 1 beat    R = rest    ~ = tied, keep holding into the next note');
+  head.push('  |: :| = repeat    [1 [2 = first/second ending    Guitar chords are written above the notes.');
+  lines.push(...head, '');
+
+  for (let i = 0; i < doc.measures.length; i += barsPerLine) {
+    let chordRow = '';
+    let noteRow = '';
+    const pad = () => { const w = Math.max(chordRow.length, noteRow.length); chordRow = chordRow.padEnd(w); noteRow = noteRow.padEnd(w); };
+    doc.measures.slice(i, i + barsPerLine).forEach((m, k) => {
+      pad();
+      const open = m.repeatStart ? '|: ' : (k === 0 ? '| ' : '');
+      noteRow += open + (m.ending ? `[${m.ending} ` : '');
+      chordRow = chordRow.padEnd(noteRow.length);
+      m.items.forEach((it, j) => {
+        if (it.invisible) return;
+        const ch = m.chords.find((c) => c.atItem === j);
+        pad();
+        if (ch) chordRow += ch.name + ' ';
+        noteRow += tok(it) + ' ';
+      });
+      pad();
+      noteRow += m.repeatEnd ? ':| ' : '| ';
+    });
+    lines.push(chordRow.trimEnd(), noteRow.trimEnd(), '');
+  }
+  return lines.join('\n');
 }

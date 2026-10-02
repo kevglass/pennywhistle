@@ -1,7 +1,7 @@
-import { analyzeTune, buildDisplayAbc, bestTranspose, whistleStats, cleanAbc, tabDocument, transposedKeyName } from './core.js';
+import { analyzeTune, buildDisplayAbc, bestTranspose, whistleStats, cleanAbc, tabDocument, tabText, transposedKeyName } from './core.js';
 import { TabView, Player, tone, defaultBpm } from './render.js';
 import { renderPages, pagesToImages, showPages, ACCEPTED } from './originals.js';
-import { $, api, apiUrl, esc, topbar, renderNow, originalSources } from './ui.js';
+import { $, api, apiUrl, esc, topbar, renderNow, originalSources, tabStyleControl } from './ui.js';
 
 $('#top').innerHTML = topbar('new');
 
@@ -50,6 +50,7 @@ const view = new TabView($('#preview'), {
 });
 const player = new Player(view, { onStop: () => { $('#play').textContent = '▶ Play'; } });
 renderNow($('#now'), null);
+tabStyleControl($('#style'), () => { if (lastDisplay) view.render(lastDisplay); });
 
 // ------------------------------------------------------------ settings
 
@@ -291,6 +292,7 @@ $('#save').addEventListener('click', async () => {
       tab: tabDocument(view.data, { generatedChords: lastGenerated }),
       transcription,
     };
+    body.tabText = tabText(body.tab, { title: body.title, composer: body.composer });
     // multipart: JSON metadata plus the original files
     const form = new FormData();
     form.append('meta', JSON.stringify(body));

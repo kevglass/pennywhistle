@@ -1,4 +1,5 @@
-import { holesSVG, beatsLabel } from './render.js';
+import { holesSVG, beatsLabel, getTabStyle, setTabStyle } from './render.js';
+import { fingerNumbers } from './core.js';
 import { chordDiagramSVG } from './guitar.js';
 
 export const $ = (sel, root = document) => root.querySelector(sel);
@@ -39,7 +40,7 @@ export function renderNow(el, item, { chord } = {}) {
       item.octaveShift ? `Out of range: played ${item.octaveShift > 0 ? 'an octave higher' : 'an octave lower'}` : '',
       item.tie ? 'Tied: keep holding into the next note' : '',
     ].filter(Boolean).map((t) => `<div class="hint">${t}</div>`).join('');
-    desc = `<div class="desc"><div class="name">${pretty(item.name)}<span class="muted small"> (${esc(item.pitch)})</span></div><div>${breath}</div><div class="hint">Length: ${len} ${beatWord}</div>${extras}</div>`;
+    desc = `<div class="desc"><div class="name">${pretty(item.name)}<span class="muted small"> (${esc(item.pitch)})</span></div><div class="fingers" title="Holes to cover">${fingerNumbers(item.holes, item.register)}</div><div>${breath}</div><div class="hint">Length: ${len} ${beatWord}</div>${extras}</div>`;
   } else if (item.type === 'rest') {
     desc = `<div class="desc"><div class="name">Rest</div><div class="hint">Silence for ${len} ${beatWord}. Take a breath.</div></div>`;
   } else {
@@ -55,10 +56,19 @@ export function renderChordList(el, names) {
     : '<p class="muted">No chords.</p>';
 }
 
+/** "Tab: Numbers | Hole diagrams" switch. onChange re-renders the tab. */
+export function tabStyleControl(el, onChange) {
+  el.innerHTML = `<label for="tab-style">Tab</label> <select id="tab-style"><option value="numbers">Numbers</option><option value="holes">Hole diagrams</option></select>`;
+  const sel = el.querySelector('select');
+  sel.value = getTabStyle();
+  sel.addEventListener('change', () => { setTabStyle(sel.value); onChange(); });
+}
+
 export function renderLegend(el) {
   el.innerHTML = `
+    <div class="item"><span class="sw" style="font:800 15px ui-monospace,monospace">123</span><span>Numbers are the holes to cover, 1 (top, nearest the mouthpiece) to 6 (bottom). <b>0</b> = all open.</span></div>
     <div class="item"><span class="sw">${holesSVG('XXXOOO')}</span><span>Holes from the mouthpiece (top) down. <b>●</b> cover, <b>○</b> open. Left hand covers the top three.</span></div>
-    <div class="item"><span class="sw">${holesSVG('XXHOOO')}</span><span>Half-filled hole = half-cover it (for notes outside the key).</span></div>
+    <div class="item"><span class="sw">${holesSVG('XXHOOO')}</span><span>Half-filled hole, or <b>½</b> after a number = half-cover that hole (for notes outside the key).</span></div>
     <div class="item"><span class="sw" style="color:var(--upper);font-weight:800;font-size:18px">+</span><span>Blow harder for the second octave (same fingering). <b>++</b> = harder still.</span></div>
     <div class="item"><span class="sw" style="width:46px;position:relative;height:14px"><span class="sustain" style="left:0;width:44px;bottom:0"><span>1½</span></span></span><span>Bar under each note = how long it lasts, with its count in beats.</span></div>
     <div class="item"><span class="sw rest-mark" style="height:auto;writing-mode:horizontal-tb">rest</span><span>Rest: stop blowing for the length shown.</span></div>

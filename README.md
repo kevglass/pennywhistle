@@ -3,7 +3,8 @@
 Turn sheet music (PDF or photos/scans) into easy-to-follow **D tin whistle tablature** with **guitar chords**.
 
 - Upload a PDF or image files. Claude reads the music and transcribes the melody.
-- The engraved score is shown with a whistle-fingering row under every line. Each note shows its holes, whether to blow harder (+), and a bar for how long it lasts; rests and tied notes are marked too.
+- The engraved score is shown with a whistle tab row under every line. Each note shows the **numbers of the holes to cover** (1 = top hole nearest the mouthpiece … 6 = bottom; `0` = all open, `+` = blow harder, `½` = half-cover), or hole diagrams if you prefer, plus a bar for how long it lasts. Rests and tied notes are marked too.
+- Each saved tune has a **plain-text number tab** (guitar chords above the numbers, bar lines, note lengths, rests) to copy or download as `.txt`. There's also a print view and a JSON download.
 - Click any note in the score (or in the tab) to highlight its fingering and see it enlarged with the guitar chord for that spot. The ← → keys step through the notes and **Play** plays the tune, following repeats.
 - Chords come from the score when it prints them. Otherwise the app suggests chords that fit each bar.
 - **Best key for whistle** finds a transposition that keeps every note in range with as little half-holing as possible.
@@ -71,16 +72,18 @@ Each approved tune is a folder:
 ```
 data/tunes/<id>/
   tune.json        everything about the tune (see below)
+  tune.txt         the plain-text number tab (what "Download tab (.txt)" gives you)
   tune.abc         the displayed notation (after transposing and adding chords)
   original-1.pdf   the uploaded original(s): .pdf / .png / .jpg …
 ```
 
-`tune.json` holds the title, settings, the approved ABC transcription, and a `tab` object. That object has the key, the meter, the chords used, and every bar's chords and notes. Each note has its pitch, MIDI number, length in beats, whistle `holes` (top to bottom, `X` = covered, `O` = open, `H` = half-covered) and `register` (2 = blow harder). Back up or move the `data/` folder to keep the library.
+`tune.json` holds the title, settings, the approved ABC transcription, and a `tab` object. That object has the key, the meter, the chords used, and every bar's chords and notes. Each note has its pitch, `fingers` (the number tab, e.g. `123` or `12345+`), MIDI number, length in beats, whistle `holes` (top to bottom, `X` = covered, `O` = open, `H` = half-covered) and `register` (2 = blow harder). Back up or move the `data/` folder to keep the library.
 
 ## Code map
 
 - `public/`: the static site. `js/core.js` holds the fingering chart, tab data, chord suggestion and best-key search. `js/render.js` draws the score with [abcjs](https://www.abcjs.net/) plus the tab rows, highlighting and playback. PDFs are rendered in the browser with [PDF.js](https://mozilla.github.io/pdf.js/). Both libraries are bundled in `public/vendor/`.
 - `public/api/index.php` → `app/api.php`: the API (`?r=config`, `tunes`, `tunes/<id>`, `tunes/<id>/files/<file>`, `tunes/<id>/delete`, `transcribe`). Transcription streams from Claude through the official Anthropic PHP SDK, with server-side fallback if a request is declined.
 - `scripts/secrets.php`, `deploy.sh`, `dev.sh`: tooling.
+- `samples/`: public-domain and CC-licensed sheet music for testing (see `samples/README.md`).
 
 Transcription accuracy depends on scan quality. Always compare the tab with the original (the editor shows them side by side) before approving.
