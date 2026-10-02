@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 """Turn raw tin-whistle note recordings into playback samples.
 
-    python3 scripts/prepare-samples.py [--raw] [SRC_DIR] [OUT_DIR]
-        default: notes -> public/sounds/whistle, or with --raw -> public/sounds/whistle-raw
-    --raw skips the clean-up (noise, overtones, wobble) for comparison; it still trims,
-    normalizes, retunes and loops.
+    python3 scripts/prepare-samples.py [SRC_DIR] [OUT_DIR]   (default: notes public/sounds/whistle)
 
 For each .wav in SRC_DIR (any name; the pitch is measured, not read from the name):
 mix to mono, trim the silence before the note and measure the sounding pitch; then
@@ -22,10 +19,8 @@ No dependencies beyond the standard library.
 """
 import cmath, glob, hashlib, json, math, os, struct, sys, wave
 
-RAW = '--raw' in sys.argv
-ARGS = [a for a in sys.argv[1:] if a != '--raw']
-SRC = ARGS[0] if ARGS else 'notes'
-OUT = ARGS[1] if len(ARGS) > 1 else 'public/sounds/whistle-raw' if RAW else 'public/sounds/whistle'
+SRC = sys.argv[1] if len(sys.argv) > 1 else 'notes'
+OUT = sys.argv[2] if len(sys.argv) > 2 else 'public/sounds/whistle'
 TARGET_RMS = 0.2  # loudness of the steady part after normalizing
 LOW, HIGH = 74, 98  # sounding range of a D whistle: D5..D7
 TAPS = 16  # resampling filter half-width, in input samples
@@ -200,8 +195,7 @@ def prepare(path, sr, x):
     spots = [steady + int(f * (len(x) - steady - n)) for f in (0.1, 0.5, 0.9)]
     midi = sorted(pitch(x[s:s + n], sr) for s in spots)[1]
 
-    if not RAW:
-        x = steady_level(denoise(x, sr, midi, steady), sr, steady)
+    x = steady_level(denoise(x, sr, midi, steady), sr, steady)
     gain = TARGET_RMS / rms(x[steady:])
     gain = min(gain, 0.95 / max(abs(v) for v in x))
     x = [v * gain for v in x]

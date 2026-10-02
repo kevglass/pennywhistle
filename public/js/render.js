@@ -318,24 +318,15 @@ function wave(a) {
 // Recorded tin-whistle notes, prepared by scripts/prepare-samples.py into
 // public/sounds/whistle/: samples.json lists each file's measured pitch (fractional
 // MIDI) and loop points. Every note is played from the nearest recording, retuned.
-// Two sets from the same recordings: 'clean' (noise, overtones and wobble tidied) and
-// 'raw' (only trimmed, levelled, retuned and looped), switchable in the player to compare.
-const SOUND_SET_KEY = 'pw-sound-set';
-const SOUND_DIRS = { clean: '../sounds/whistle/', raw: '../sounds/whistle-raw/' };
-export function getSoundSet() { try { return SOUND_DIRS[localStorage.getItem(SOUND_SET_KEY)] ? localStorage.getItem(SOUND_SET_KEY) : 'clean'; } catch { return 'clean'; } }
-export function setSoundSet(v) {
-  try { localStorage.setItem(SOUND_SET_KEY, v); } catch { /* storage blocked */ }
-  samplesLoading = null;
-  loadSamples();
-}
+// Recorded tin-whistle notes, prepared by scripts/prepare-samples.py into
+// public/sounds/whistle/: samples.json lists each file's pitch and loop points.
+const SAMPLE_DIR = new URL('../sounds/whistle/', import.meta.url);
 let samples = []; // { midi, loopStart, loopEnd, buffer }, sorted by pitch
-let samplesLoading = null, samplesReady = false, loadGen = 0;
+let samplesLoading = null, samplesReady = false;
 export function loadSamples() {
   if (!samplesLoading) {
-    const gen = ++loadGen;
-    const dir = new URL(SOUND_DIRS[getSoundSet()], import.meta.url);
     const decoder = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 44100);
-    const get = (name, opts) => fetch(new URL(name, dir), opts).then((r) => (r.ok ? r : Promise.reject(new Error(`${name}: ${r.status}`))));
+    const get = (name, opts) => fetch(new URL(name, SAMPLE_DIR), opts).then((r) => (r.ok ? r : Promise.reject(new Error(`${name}: ${r.status}`))));
     const next = [];
     // the manifest is always revalidated; each file's ?v= changes whenever its content does
     samplesLoading = get('samples.json', { cache: 'no-cache' }).then((r) => r.json())
@@ -344,8 +335,8 @@ export function loadSamples() {
         .then((b) => decoder.decodeAudioData(b))
         .then((buffer) => { next.push({ ...s, buffer }); })
         .catch(() => { /* a missing file just leaves a gap the others cover */ }))))
-      .then(() => { if (gen === loadGen && next.length) samples = next.sort((x, y) => x.midi - y.midi); })
-      .catch(() => { /* no samples: the synth (or the previous set) is used */ })
+      .then(() => { samples = next.sort((x, y) => x.midi - y.midi); })
+      .catch(() => { /* no samples: the synth is used */ })
       .finally(() => { samplesReady = true; });
   }
   return samplesLoading;
