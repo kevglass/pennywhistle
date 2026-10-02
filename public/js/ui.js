@@ -66,9 +66,10 @@ export function tabStyleControl(el, onChange) {
 
 export function renderLegend(el) {
   el.innerHTML = `
-    <div class="item"><span class="sw" style="font:800 15px ui-monospace,monospace">123</span><span>Numbers are the holes to cover, 1 (top, nearest the mouthpiece) to 6 (bottom). <b>0</b> = all open.</span></div>
+    <div class="item"><span class="sw" style="font:800 15px ui-monospace,monospace">3</span><span>How many holes to hold down, counting from the top (mouthpiece end): <b>3</b> = holes 1, 2 and 3. <b>0</b> = all open.</span></div>
+    <div class="item"><span class="sw" style="font:800 15px ui-monospace,monospace"><small style="color:var(--warn);font-size:10px">0/</small>2</span><span>Top hole open, then hold the next holes: <b>0/2</b> = holes 2 and 3, <b>0/5</b> = holes 2 to 6.</span></div>
     <div class="item"><span class="sw">${holesSVG('XXXOOO')}</span><span>Holes from the mouthpiece (top) down. <b>●</b> cover, <b>○</b> open. Left hand covers the top three.</span></div>
-    <div class="item"><span class="sw">${holesSVG('XXHOOO')}</span><span>Half-filled hole, or <b>½</b> after a number = half-cover that hole (for notes outside the key).</span></div>
+    <div class="item"><span class="sw">${holesSVG('XXHOOO')}</span><span>Half-filled hole, or <b>½</b> after a number = also half-cover the next hole (<b>4½</b> = holes 1–4 and half of 5).</span></div>
     <div class="item"><span class="sw" style="color:var(--upper);font-weight:800;font-size:18px">+</span><span>Blow harder for the second octave (same fingering). <b>++</b> = harder still.</span></div>
     <div class="item"><span class="sw" style="width:46px;position:relative;height:14px"><span class="sustain" style="left:0;width:44px;bottom:0"><span>1½</span></span></span><span>Bar under each note = how long it lasts, with its count in beats.</span></div>
     <div class="item"><span class="sw rest-mark" style="height:auto;writing-mode:horizontal-tb">rest</span><span>Rest: stop blowing for the length shown.</span></div>

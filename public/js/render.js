@@ -2,7 +2,8 @@
 // links notes <-> fingerings for click highlighting, and plays the tune.
 import { analyzeTune, fingerNumbers } from './core.js';
 
-const TAB_H = 132; // vertical room reserved under each system for the tab row
+// vertical room reserved under each system for the tab row
+const tabHeight = () => (getTabStyle() === 'holes' ? 132 : 78);
 
 const FRACTIONS = { 0.25: '¼', 0.333: '⅓', 0.5: '½', 0.667: '⅔', 0.75: '¾', 0.125: '⅛', 0.167: '⅙' };
 export function beatsLabel(b) {
@@ -31,9 +32,11 @@ export function holesSVG(holes, { r = 4.6, gap = 10.6, pad = 1.5, groupGap = 5, 
   return s + '</svg>';
 }
 
-/** Vertical number column: the digit of each hole to cover, a dot for open holes. */
-export function digitsHTML(holes) {
-  return `<span class="digits" aria-hidden="true">${[...holes].map((c, i) => (c === 'X' ? `<b>${i + 1}</b>` : c === 'H' ? `<b class="half">${i + 1}½</b>` : '<i>·</i>')).join('')}</span>`;
+/** The number-tab token for a note ("3", "0/2", "4½"), without the octave mark. */
+export function countHTML(holes) {
+  const t = fingerNumbers(holes);
+  const m = t.match(/^0\/(.+)$/);
+  return m ? `<span class="count open-top" aria-hidden="true"><small>0/</small>${m[1]}</span>` : `<span class="count" aria-hidden="true">${t}</span>`;
 }
 
 const TAB_STYLE_KEY = 'pw-tab-style';
@@ -79,6 +82,8 @@ export class TabView {
       return null;
     }
 
+    const TAB_H = tabHeight();
+    this.tabH = TAB_H;
     const { data, refs } = analyzeTune(visual);
     this.data = data;
     this.refs = refs;
@@ -154,13 +159,13 @@ export class TabView {
         const next = xs.slice(j + 1).find((v) => v != null) ?? lineEnd;
         const cell = document.createElement('button');
         cell.type = 'button';
-        cell.className = `cell ${it.type}` + (it.halfHole ? ' half' : '') + (it.octaveShift ? ' shifted' : '') + (it.register > 1 ? ' upper' : '');
+        cell.className = `cell ${it.type} style-${getTabStyle()}` + (it.halfHole ? ' half' : '') + (it.octaveShift ? ' shifted' : '') + (it.register > 1 ? ' upper' : '');
         cell.style.left = x + 'px';
         cell.dataset.i = r.index;
         const len = beatsLabel(it.beats);
         if (it.type === 'note') {
           const shift = it.octaveShift ? `<span class="shift" title="Out of whistle range - played ${it.octaveShift > 0 ? 'an octave higher' : 'an octave lower'}">${it.octaveShift > 0 ? '8↑' : '8↓'}</span>` : '';
-          const fingering = getTabStyle() === 'holes' ? holesSVG(it.holes) : digitsHTML(it.holes);
+          const fingering = getTabStyle() === 'holes' ? holesSVG(it.holes) : countHTML(it.holes);
           cell.innerHTML = `<span class="nn">${it.name.replace('#', '♯').replace(/b$/, '♭')}</span>${fingering}<span class="reg">${registerMark(it) || '&nbsp;'}</span>${shift}`;
           cell.setAttribute('aria-label', `${it.pitch}, cover ${fingerNumbers(it.holes, it.register)}, ${len} beats${it.register > 1 ? ', blow harder' : ''}`);
         } else if (it.type === 'rest') {

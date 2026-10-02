@@ -3,7 +3,7 @@
 Turn sheet music (PDF or photos/scans) into easy-to-follow **D tin whistle tablature** with **guitar chords**.
 
 - Upload a PDF or image files. Claude reads the music and transcribes the melody.
-- The engraved score is shown with a whistle tab row under every line. Each note shows the **numbers of the holes to cover** (1 = top hole nearest the mouthpiece … 6 = bottom; `0` = all open, `+` = blow harder, `½` = half-cover), or hole diagrams if you prefer, plus a bar for how long it lasts. Rests and tied notes are marked too.
+- The engraved score is shown with a whistle tab row under every line. Each note shows **how many holes to hold down from the top** (`3` = holes 1–3; `0/2` = top hole open, hold the next 2; `0` = all open; `+` = blow harder; `½` = also half-cover the next hole), or hole diagrams if you prefer, plus a bar for how long it lasts. Rests and tied notes are marked too.
 - Each saved tune has a **plain-text number tab** (guitar chords above the numbers, bar lines, note lengths, rests) to copy or download as `.txt`. There's also a print view and a JSON download.
 - Click any note in the score (or in the tab) to highlight its fingering and see it enlarged with the guitar chord for that spot. The ← → keys step through the notes and **Play** plays the tune, following repeats.
 - Chords come from the score when it prints them. Otherwise the app suggests chords that fit each bar.
@@ -77,7 +77,7 @@ data/tunes/<id>/
   original-1.pdf   the uploaded original(s): .pdf / .png / .jpg …
 ```
 
-`tune.json` holds the title, settings, the approved ABC transcription, and a `tab` object. That object has the key, the meter, the chords used, and every bar's chords and notes. Each note has its pitch, `fingers` (the number tab, e.g. `123` or `12345+`), MIDI number, length in beats, whistle `holes` (top to bottom, `X` = covered, `O` = open, `H` = half-covered) and `register` (2 = blow harder). Back up or move the `data/` folder to keep the library.
+`tune.json` holds the title, settings, the approved ABC transcription, and a `tab` object. That object has the key, the meter, the chords used, and every bar's chords and notes. Each note has its pitch, `fingers` (the number tab, e.g. `3`, `0/2` or `5+`), MIDI number, length in beats, whistle `holes` (top to bottom, `X` = covered, `O` = open, `H` = half-covered) and `register` (2 = blow harder). Back up or move the `data/` folder to keep the library.
 
 ## Code map
 

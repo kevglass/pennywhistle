@@ -128,6 +128,10 @@ details > summary { cursor: pointer; font-weight: 600; }
 .cell .shift { font-size: 9px; color: var(--warn); font-weight: 700; }
 .cell.upper .nn { color: var(--upper); }
 .cell.half .nn { text-decoration: underline dotted var(--warn); }
+.count { font: 800 15px/1.15 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; padding: 4px 0 2px; }
+.count.open-top small { font-size: 10px; font-weight: 700; color: var(--warn); }
+.cell.active .count { color: var(--hi); }
+.cell.style-numbers .rest-mark, .cell.style-numbers .hold-mark { height: 30px; }
 .digits { display: flex; flex-direction: column; align-items: center; font-size: 11.5px; line-height: 10.6px; font-variant-numeric: tabular-nums; min-height: 69px; }
 .digits b { font-weight: 800; }
 .digits b.half { color: var(--warn); font-size: 9px; }
