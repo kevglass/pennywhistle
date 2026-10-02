@@ -1,5 +1,5 @@
 import { holesSVG, beatsLabel, getTabStyle, setTabStyle } from './render.js';
-import { fingerNumbers } from './core.js';
+import { fingerNumbers, markFor } from './core.js';
 import { chordDiagramSVG } from './guitar.js';
 
 export const $ = (sel, root = document) => root.querySelector(sel);
@@ -32,8 +32,9 @@ export function renderNow(el, item, { chord } = {}) {
   let holes = '', desc = '';
   if (item.type === 'note') {
     holes = `<div class="big-holes">${holesSVG(item.holes, { r: 8, gap: 18, groupGap: 8, label: 'Fingering for ' + item.pitch })}</div>`;
-    const breath = item.register === 3 ? '<span class="upper">Blow much harder (3rd octave) \'\'</span>'
-      : item.register === 2 ? '<span class="upper">Blow harder (high octave) \'</span>' : 'Gentle breath (low octave)';
+    const mark = markFor(item.holes, item.register);
+    const breath = item.register === 3 ? `<span class="upper">Blow much harder (3rd octave)${mark ? ' ' + mark : ''}</span>`
+      : item.register === 2 ? `<span class="upper">Blow harder (high octave)${mark ? ' ' + mark : ''}</span>` : 'Gentle breath (low octave)';
     const extras = [
       item.halfHole ? 'Half-cover the marked hole' : '',
       item.cross ? 'Cross fingering' : '',
@@ -70,7 +71,7 @@ export function renderLegend(el) {
     <div class="item"><span class="sw" style="font:800 15px ui-monospace,monospace"><small style="color:var(--warn);font-size:10px">0/</small>2</span><span>Top hole open, then hold the next holes: <b>0/2</b> = holes 2 and 3, <b>0/5</b> = holes 2 to 6.</span></div>
     <div class="item"><span class="sw">${holesSVG('XXXOOO')}</span><span>Holes from the mouthpiece (top) down. <b>●</b> cover, <b>○</b> open. Left hand covers the top three.</span></div>
     <div class="item"><span class="sw">${holesSVG('XXHOOO')}</span><span>Half-filled hole, or <b>½</b> after a number = also half-cover the next hole (<b>4½</b> = holes 1–4 and half of 5).</span></div>
-    <div class="item"><span class="sw" style="color:var(--upper);font-weight:900;font-size:18px">3'</span><span><b>'</b> after the number = blow harder for the high octave (same fingering). <b>''</b> = harder still.</span></div>
+    <div class="item"><span class="sw" style="color:var(--upper);font-weight:900;font-size:18px">3'</span><span><b>'</b> after the number = blow harder for the high octave (same fingering). <b>''</b> = harder still. <b>0/</b> fingerings never have <b>'</b>; they are already high notes.</span></div>
     <div class="item"><span class="sw" style="width:46px;position:relative;height:14px"><span class="sustain" style="left:0;width:44px;bottom:0"><span>1½</span></span></span><span>Bar under each note = how long it lasts, with its count in beats.</span></div>
     <div class="item"><span class="sw rest-mark" style="height:auto;writing-mode:horizontal-tb">rest</span><span>Rest: stop blowing for the length shown.</span></div>
     <div class="item"><span class="sw hold-mark" style="height:auto;writing-mode:horizontal-tb">hold</span><span>Hold: a tied note, keep the previous note going.</span></div>

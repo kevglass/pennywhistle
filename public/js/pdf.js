@@ -1,7 +1,7 @@
 // "Download PDF": the score with the whistle number tab under every line (vector),
 // guitar chord diagrams, and the plain-text tab. Built in the browser with jsPDF + svg2pdf.
 import { TabView, beatsLabel, getTabStyle } from './render.js';
-import { fingerNumbers, octaveMark } from './core.js';
+import { fingerNumbers, markFor } from './core.js';
 import { chordDiagramSVG } from './guitar.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -53,7 +53,7 @@ function drawTabRow(svg, view, box, width) {
           svg.appendChild(el('circle', { cx: x, cy, r: 4.4, fill: h === 'X' ? C.ink : '#ffffff', stroke: C.ink, 'stroke-width': 1.1 }));
           if (h === 'H') svg.appendChild(el('path', { d: `M ${x} ${cy - 4.4} A 4.4 4.4 0 0 0 ${x} ${cy + 4.4} Z`, fill: C.ink }));
         });
-        if (upper) svg.appendChild(el('text', { ...font, x, y: y0 + 98, 'font-size': 14, 'font-weight': 'bold', fill: C.upper }, octaveMark(it.register)));
+        if (markFor(it.holes, it.register)) svg.appendChild(el('text', { ...font, x, y: y0 + 98, 'font-size': 14, 'font-weight': 'bold', fill: C.upper }, markFor(it.holes, it.register)));
       } else {
         const t = el('text', { ...font, x, y: y0 + 31, 'font-size': 14, 'font-weight': 'bold', fill: C.ink });
         const tok = fingerNumbers(it.holes);
@@ -62,7 +62,7 @@ function drawTabRow(svg, view, box, width) {
           t.appendChild(el('tspan', { 'font-size': 9.5, fill: C.warn }, '0/'));
           t.appendChild(el('tspan', {}, pdfText(m[1])));
         } else t.appendChild(el('tspan', {}, pdfText(tok)));
-        if (upper) t.appendChild(el('tspan', { fill: C.upper }, octaveMark(it.register)));
+        if (markFor(it.holes, it.register)) t.appendChild(el('tspan', { fill: C.upper }, markFor(it.holes, it.register)));
         svg.appendChild(t);
       }
     } else {

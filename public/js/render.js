@@ -1,6 +1,6 @@
 // Renders the engraved score with a penny-whistle tab row under every line,
 // links notes <-> fingerings for click highlighting, and plays the tune.
-import { analyzeTune, fingerNumbers, octaveMark } from './core.js';
+import { analyzeTune, fingerNumbers, markFor } from './core.js';
 
 // vertical room reserved under each system for the tab row
 const tabHeight = () => (getTabStyle() === 'holes' ? 132 : 78);
@@ -35,7 +35,7 @@ export function holesSVG(holes, { r = 4.6, gap = 10.6, pad = 1.5, groupGap = 5, 
 /** The number-tab token for a note ("3", "0/2", "4½", "3'"). */
 export function countHTML(holes, register = 1) {
   const t = fingerNumbers(holes);
-  const mark = octaveMark(register) ? `<span class="oct">${octaveMark(register)}</span>` : '';
+  const mark = markFor(holes, register) ? `<span class="oct">${markFor(holes, register)}</span>` : '';
   const m = t.match(/^0\/(.+)$/);
   return m ? `<span class="count open-top" aria-hidden="true"><small>0/</small>${m[1]}${mark}</span>` : `<span class="count" aria-hidden="true">${t}${mark}</span>`;
 }
@@ -44,7 +44,7 @@ const TAB_STYLE_KEY = 'pw-tab-style';
 export function getTabStyle() { try { return localStorage.getItem(TAB_STYLE_KEY) || 'numbers'; } catch { return 'numbers'; } }
 export function setTabStyle(v) { try { localStorage.setItem(TAB_STYLE_KEY, v); } catch { /* storage blocked */ } }
 
-const registerMark = (it) => octaveMark(it.register);
+const registerMark = (it) => markFor(it.holes, it.register);
 
 export class TabView {
   constructor(container, { onSelect } = {}) {
