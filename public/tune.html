@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Whistle Tab</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/app.css">
+<script src="/vendor/abcjs-basic-min.js"></script>
+</head>
+<body>
+<div id="top"></div>
+<main>
+  <div class="tune-head">
+    <div>
+      <h1 id="title">Loading…</h1>
+      <div id="meta" class="badges"></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="toggle-original" aria-pressed="false" hidden>Show original music</button>
+      <a class="btn" id="edit" href="#">Edit</a>
+      <a class="btn" id="json" href="#" download>Download JSON</a>
+      <button class="btn" id="print" type="button">Print</button>
+      <button class="btn danger" id="delete" type="button">Delete</button>
+    </div>
+  </div>
+
+  <div class="split" id="split">
+    <aside class="original-pane" id="original" hidden aria-label="Original music"></aside>
+    <div class="tab-pane">
+      <div class="player">
+        <div class="controls">
+          <button class="btn" id="play" type="button">▶ Play</button>
+          <label for="tempo">Tempo</label><input type="range" id="tempo" min="30" max="220" value="90"><span id="tempo-v" class="small">90</span>
+          <label class="small"><input type="checkbox" id="sound" checked> Sound on click</label>
+        </div>
+        <div class="now" id="now"></div>
+      </div>
+      <div id="tab"></div>
+      <p class="muted small no-print">Tip: click any note in the music or the tab to see its fingering. Use ← → to step through the notes.</p>
+    </div>
+  </div>
+
+  <section class="card stack" style="margin-top:16px">
+    <h2>Guitar chords in this tune</h2>
+    <div id="chords" class="chord-list"></div>
+  </section>
+  <section class="card stack no-print" style="margin-top:16px">
+    <h2>How to read the tab</h2>
+    <div id="legend" class="legend"></div>
+  </section>
+</main>
+
+<script type="module">
+import { buildDisplayAbc } from '/js/core.js';
+import { TabView, Player, tone, defaultBpm } from '/js/render.js';
+import { renderPages, showPages } from '/js/originals.js';
+import { $, api, esc, topbar, renderNow, renderChordList, renderLegend, originalSources } from '/js/ui.js';
+
+$('#top').innerHTML = topbar();
+renderLegend($('#legend'));
+const id = new URLSearchParams(location.search).get('id');
+
+const view = new TabView($('#tab'), {
+  onSelect: (item, i, ctx) => {
+    renderNow($('#now'), item, ctx);
+    if (ctx.source !== 'play' && item.type === 'note' && $('#sound').checked) tone(item.midi, undefined, Math.min(0.6, 0.25 + item.beats * 0.1));
+  },
+});
+const player = new Player(view, { onStop: () => { $('#play').textContent = '▶ Play'; } });
+renderNow($('#now'), null);
+
+let tune, displayAbc, pagesLoaded = false;
+const PREF = 'pw-show-original';
+const pref = () => { try { return localStorage.getItem(PREF) === '1'; } catch { return false; } };
+
+async function setOriginal(show) {
+  try { localStorage.setItem(PREF, show ? '1' : '0'); } catch { /* storage blocked */ }
+  const btn = $('#toggle-original');
+  btn.setAttribute('aria-pressed', String(show));
+  btn.textContent = show ? 'Hide original music' : 'Show original music';
+  $('#original').hidden = !show;
+  $('#split').classList.toggle('with-original', show);
+  if (show && !pagesLoaded) {
+    pagesLoaded = true;
+    $('#original').innerHTML = '<p class="muted">Loading original…</p>';
+    try { showPages($('#original'), await renderPages(originalSources(tune))); }
+    catch (e) { $('#original').innerHTML = `<p class="error">Could not load the original: ${esc(e.message)}</p>`; }
+  }
+  view.render(displayAbc);
+}
+
+try {
+  tune = await api(`/api/tunes/${encodeURIComponent(id)}`);
+  document.title = tune.title;
+  $('#title').textContent = tune.title;
+  const t = tune.tab || {};
+  $('#meta').innerHTML = [
+    tune.composer && `<span class="badge">${esc(tune.composer)}</span>`,
+    t.key && `<span class="badge accent">Key ${esc(t.key)}</span>`,
+    t.meter && `<span class="badge">${esc(t.meter)}</span>`,
+    tune.settings?.transpose ? `<span class="badge">transposed ${tune.settings.transpose > 0 ? '+' : ''}${tune.settings.transpose} from the original</span>` : '',
+    `<span class="badge">approved ${new Date(tune.updatedAt).toLocaleDateString()}</span>`,
+  ].filter(Boolean).join('');
+  $('#edit').href = `/editor.html?id=${encodeURIComponent(tune.id)}`;
+  $('#json').href = URL.createObjectURL(new Blob([JSON.stringify(tune, null, 2)], { type: 'application/json' }));
+  $('#json').download = `${tune.id}.json`;
+
+  displayAbc = tune.displayAbc || buildDisplayAbc(tune.abc, tune.settings || {}).abc;
+  view.render(displayAbc);
+  renderChordList($('#chords'), t.chordsUsed || []);
+  $('#tempo').value = defaultBpm(view.visual);
+  $('#tempo-v').textContent = $('#tempo').value;
+
+  if (tune.originals?.length) {
+    $('#toggle-original').hidden = false;
+    $('#toggle-original').addEventListener('click', () => setOriginal($('#original').hidden));
+    if (pref()) setOriginal(true);
+  }
+} catch (e) {
+  $('#title').textContent = 'Tune not found';
+  $('#tab').innerHTML = `<p class="error">${esc(e.message)}</p><p><a href="/">Back to the library</a></p>`;
+  document.querySelectorAll('.actions .btn, .player').forEach((b) => (b.hidden = true));
+}
+
+$('#tempo').addEventListener('input', () => { $('#tempo-v').textContent = $('#tempo').value; });
+$('#play').addEventListener('click', () => {
+  if (player.playing) { player.stop(); return; }
+  player.play(Number($('#tempo').value), view.selected);
+  $('#play').textContent = '■ Stop';
+});
+$('#print').addEventListener('click', () => window.print());
+$('#delete').addEventListener('click', async () => {
+  if (!confirm(`Delete “${tune.title}” and its original files from the library?`)) return;
+  await api(`/api/tunes/${encodeURIComponent(tune.id)}`, { method: 'DELETE' });
+  location.href = '/';
+});
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest('input, textarea, select')) return;
+  if (e.key === 'ArrowRight') { view.step(1); e.preventDefault(); }
+  if (e.key === 'ArrowLeft') { view.step(-1); e.preventDefault(); }
+  if (e.key === ' ') { $('#play').click(); e.preventDefault(); }
+});
+let rt;
+window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => displayAbc && view.render(displayAbc), 250); });
+</script>
+</body>
+</html>
