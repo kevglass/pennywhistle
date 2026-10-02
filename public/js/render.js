@@ -309,16 +309,70 @@ function wave(a) {
   return whistleWave;
 }
 
+// Recorded tin-whistle notes, prepared by scripts/prepare-samples.py into
+// public/sounds/whistle/: samples.json lists each file's measured pitch (fractional
+// MIDI) and loop points. Every note is played from the nearest recording, retuned.
+const SAMPLE_DIR = new URL('../sounds/whistle/', import.meta.url);
+const samples = []; // { midi, loopStart, loopEnd, buffer }, sorted by pitch
+let samplesLoading = null, samplesReady = false;
+export function loadSamples() {
+  if (!samplesLoading) {
+    const decoder = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 44100);
+    const get = (name) => fetch(new URL(name, SAMPLE_DIR)).then((r) => (r.ok ? r : Promise.reject(new Error(`${name}: ${r.status}`))));
+    samplesLoading = get('samples.json').then((r) => r.json())
+      .then((list) => Promise.all(list.map((s) => get(s.file)
+        .then((r) => r.arrayBuffer())
+        .then((b) => decoder.decodeAudioData(b))
+        .then((buffer) => { samples.push({ ...s, buffer }); })
+        .catch(() => { /* a missing file just leaves a gap the others cover */ }))))
+      .then(() => samples.sort((x, y) => x.midi - y.midi))
+      .catch(() => { /* no samples: the synth is used */ })
+      .finally(() => { samplesReady = true; });
+  }
+  return samplesLoading;
+}
+loadSamples();
+
+function nearestSample(midi) {
+  let best = null;
+  for (const s of samples) if (!best || Math.abs(s.midi - midi) < Math.abs(best.midi - midi)) best = s;
+  return best;
+}
+
 /**
- * A penny-whistle note: a pure, slightly breathy tone with an air "chiff" and a
- * small pitch scoop at the start, and gentle vibrato on longer notes.
- * A D whistle sounds an octave above the written pitch.
+ * A penny-whistle note. Uses the nearest recorded note, retuned, once they have loaded;
+ * otherwise a synthesized tone. A D whistle sounds an octave above the written pitch.
  */
 export function tone(midi, start, dur, level = 0.2, context = null) {
   const a = context || audio(); // context: e.g. an OfflineAudioContext for rendering
   const t0 = Math.max(start ?? a.currentTime, a.currentTime);
-  const f = 440 * Math.pow(2, (midi + 12 - 69) / 12);
   const end = t0 + Math.max(0.07, dur - 0.025); // tiny gap so repeated notes are tongued
+  const s = nearestSample(midi + 12);
+  if (s) sampleTone(a, s, midi + 12, t0, end, level);
+  else synthTone(a, midi, t0, end, dur, level);
+}
+
+function sampleTone(a, s, target, t0, end, level) {
+  const src = a.createBufferSource();
+  src.buffer = s.buffer;
+  src.playbackRate.value = Math.pow(2, (target - s.midi) / 12);
+  src.loop = true; // the loop has a crossfade baked in, so held notes sustain smoothly
+  src.loopStart = s.loopStart;
+  src.loopEnd = s.loopEnd;
+  const g = a.createGain();
+  const vol = level * 2.5; // samples are normalized to an RMS of 0.2
+  g.gain.setValueAtTime(vol, t0);
+  g.gain.setValueAtTime(vol, Math.max(t0, end - 0.03));
+  g.gain.exponentialRampToValueAtTime(0.0001, end);
+  src.connect(g).connect(a.destination);
+  src.start(t0);
+  src.stop(end + 0.05);
+}
+
+/** Synthesized fallback: a pure, slightly breathy tone with an air "chiff",
+ *  a small pitch scoop at the start, and gentle vibrato on longer notes. */
+function synthTone(a, midi, t0, end, dur, level) {
+  const f = 440 * Math.pow(2, (midi + 12 - 69) / 12);
   const out = a.createGain();
   out.gain.value = 1;
   const lp = a.createBiquadFilter(); // soften the top end like a real whistle bore
@@ -397,6 +451,11 @@ export class Player {
     if (fromItem >= 0) {
       const at = order.indexOf(fromItem);
       if (at > 0) order = order.slice(at);
+    }
+    if (!samplesReady) { // first play: wait for the samples, then start
+      this.playing = true;
+      loadSamples().then(() => { if (this.playing) { this.playing = false; this.play(bpm, fromItem); } });
+      return;
     }
     const a = audio();
     let t = a.currentTime + 0.12;

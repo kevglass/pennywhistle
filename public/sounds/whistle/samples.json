@@ -1,0 +1,86 @@
+[
+ {
+  "file": "4.wav",
+  "midi": 74.36,
+  "loopStart": 0.2513,
+  "loopEnd": 0.9605,
+  "source": "tin-whistle-d-key.wav"
+ },
+ {
+  "file": "5.wav",
+  "midi": 76.53,
+  "loopStart": 0.2511,
+  "loopEnd": 1.1701,
+  "source": "tin-whistle-e-key.wav"
+ },
+ {
+  "file": "6.wav",
+  "midi": 79.69,
+  "loopStart": 0.2502,
+  "loopEnd": 1.4007,
+  "source": "tin-whistle-g-key.wav"
+ },
+ {
+  "file": "2.wav",
+  "midi": 81.7,
+  "loopStart": 0.251,
+  "loopEnd": 1.3206,
+  "source": "tin-whistle-a-key.wav"
+ },
+ {
+  "file": "3.wav",
+  "midi": 85.05,
+  "loopStart": 0.2506,
+  "loopEnd": 1.5808,
+  "source": "tin-whistle-c-key.wav"
+ },
+ {
+  "file": "8.wav",
+  "midi": 85.75,
+  "loopStart": 0.2507,
+  "loopEnd": 0.6502,
+  "source": "tin-whistle-high-c-key.wav"
+ },
+ {
+  "file": "9.wav",
+  "midi": 86.57,
+  "loopStart": 0.2505,
+  "loopEnd": 0.6601,
+  "source": "tin-whistle-high-d-key.wav"
+ },
+ {
+  "file": "10.wav",
+  "midi": 88.42,
+  "loopStart": 0.2503,
+  "loopEnd": 1.2207,
+  "source": "tin-whistle-high-e-key.wav"
+ },
+ {
+  "file": "11.wav",
+  "midi": 90.34,
+  "loopStart": 0.2504,
+  "loopEnd": 1.2804,
+  "source": "tin-whistle-high-f-key.wav"
+ },
+ {
+  "file": "12.wav",
+  "midi": 91.32,
+  "loopStart": 0.2505,
+  "loopEnd": 1.0205,
+  "source": "tin-whistle-high-g-key.wav"
+ },
+ {
+  "file": "7.wav",
+  "midi": 93.35,
+  "loopStart": 0.2505,
+  "loopEnd": 0.9305,
+  "source": "tin-whistle-high-a-key.wav"
+ },
+ {
+  "file": "1.wav",
+  "midi": 94.99,
+  "loopStart": 0.2504,
+  "loopEnd": 0.8603,
+  "source": "thin-whistle-high-b-key.wav"
+ }
+]

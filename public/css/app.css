@@ -142,11 +142,9 @@ details > summary { cursor: pointer; font-weight: 600; }
 .rest-mark, .hold-mark { writing-mode: vertical-rl; font-size: 11px; color: var(--rest); letter-spacing: 2px; height: 72px; display: flex; align-items: center; justify-content: center; }
 .hold-mark { color: var(--muted); }
 .cell.rest .rest-mark { border-left: 2px dotted var(--rest); padding-left: 2px; }
-.sustain { position: absolute; bottom: 2px; height: 14px; border-left: 2px solid var(--accent); }
-.sustain::after { content: ''; position: absolute; left: 0; right: 0; top: 6px; height: 3px; border-radius: 2px; background: var(--accent); opacity: .45; }
-.sustain.rest { border-left-color: var(--rest); }
-.sustain.rest::after { background: repeating-linear-gradient(90deg, var(--rest) 0 4px, transparent 4px 7px); opacity: .7; }
-.sustain.hold { border-left-color: transparent; }
+.sustain { position: absolute; bottom: 2px; height: 14px; }
+.sustain.rest { border-left: 2px solid var(--rest); }
+.sustain.rest::after { content: ''; position: absolute; left: 0; right: 0; top: 6px; height: 3px; border-radius: 2px; background: repeating-linear-gradient(90deg, var(--rest) 0 4px, transparent 4px 7px); opacity: .7; }
 .sustain span { position: absolute; right: 2px; top: -3px; font-size: 9px; color: var(--muted); background: var(--surface); padding: 0 2px; line-height: 1.2; }
 
 /* ---------- now-playing / selection panel */
@@ -174,9 +172,6 @@ details > summary { cursor: pointer; font-weight: 600; }
 .cd-open { fill: none; stroke: var(--ink); stroke-width: 1.2; }
 .cd-mark, .cd-fret, .cd-muted { font: 10px var(--font); fill: var(--muted); }
 
-.legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 20px; font-size: .88rem; }
-.legend .item { display: flex; gap: 10px; align-items: center; }
-.legend .sw { flex: 0 0 auto; }
 
 .tune-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: start; justify-content: space-between; margin-bottom: 14px; }
 .tune-head .actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -191,6 +186,10 @@ details > summary { cursor: pointer; font-weight: 600; }
 /* ---------- player settings group */
 .player .settings { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .player .settings-toggle { display: none; }
+.player .player-collapse { margin-left: auto; align-self: flex-start; padding: 4px 10px; }
+.player.collapsed { width: max-content; margin-left: auto; padding: 6px; }
+.player.collapsed > :not(.player-collapse) { display: none !important; }
+.player.collapsed .player-collapse { margin: 0; }
 .check { display: inline-flex; align-items: center; gap: 6px; }
 .brand-short { display: none; }
 
@@ -249,6 +248,8 @@ details > summary { cursor: pointer; font-weight: 600; }
   .player.show-settings .settings { display: flex; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
   .player.show-settings .settings-toggle { background: var(--accent-soft); border-color: var(--accent); }
   .player .settings input[type=range] { flex: 1 1 110px; min-width: 0; }
+  body.has-player.player-collapsed { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .player.collapsed { left: auto; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); border-radius: 999px; border-bottom: 1px solid var(--line); padding: 6px; }
   .player .settings #style { display: inline-flex; align-items: center; gap: 6px; }
   .now { min-height: 0; margin-left: 0; flex: 1; gap: 10px; width: auto; }
   .now .big-holes svg { width: auto; height: 76px; }

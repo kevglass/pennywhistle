@@ -46,6 +46,7 @@
           </div>
         </div>
         <div class="now" id="now"></div>
+      <button class="btn player-collapse" type="button" aria-expanded="true" aria-label="Hide player" title="Hide player">▾</button>
       </div>
       <div id="tab"></div>
       <p class="muted small no-print">Tip: tap any note in the music or the tab to see its fingering.<span class="kbd-tip"> Use ← → to step through the notes.</span></p>
@@ -56,20 +57,15 @@
     <h2>Guitar chords in this tune</h2>
     <div id="chords" class="chord-list"></div>
   </section>
-  <section class="card stack no-print" style="margin-top:16px">
-    <h2>How to read the tab</h2>
-    <div id="legend" class="legend"></div>
-  </section>
 </main>
 
 <script type="module">
 import { buildDisplayAbc } from './js/core.js';
 import { TabView, Player, tone, defaultBpm } from './js/render.js';
 import { renderPages, showPages } from './js/originals.js';
-import { $, api, esc, topbar, renderNow, renderChordList, renderLegend, originalSources, tabStyleControl } from './js/ui.js';
+import { $, api, esc, topbar, renderNow, renderChordList, originalSources, tabStyleControl } from './js/ui.js';
 
 $('#top').innerHTML = topbar();
-renderLegend($('#legend'));
 const id = new URLSearchParams(location.search).get('id');
 
 const view = new TabView($('#tab'), {
