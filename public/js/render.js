@@ -1,6 +1,6 @@
 // Renders the engraved score with a penny-whistle tab row under every line,
 // links notes <-> fingerings for click highlighting, and plays the tune.
-import { analyzeTune, fingerNumbers } from './core.js';
+import { analyzeTune, fingerNumbers, octaveMark } from './core.js';
 
 // vertical room reserved under each system for the tab row
 const tabHeight = () => (getTabStyle() === 'holes' ? 132 : 78);
@@ -32,18 +32,19 @@ export function holesSVG(holes, { r = 4.6, gap = 10.6, pad = 1.5, groupGap = 5, 
   return s + '</svg>';
 }
 
-/** The number-tab token for a note ("3", "0/2", "4½"), without the octave mark. */
-export function countHTML(holes) {
+/** The number-tab token for a note ("3", "0/2", "4½", "3'"). */
+export function countHTML(holes, register = 1) {
   const t = fingerNumbers(holes);
+  const mark = octaveMark(register) ? `<span class="oct">${octaveMark(register)}</span>` : '';
   const m = t.match(/^0\/(.+)$/);
-  return m ? `<span class="count open-top" aria-hidden="true"><small>0/</small>${m[1]}</span>` : `<span class="count" aria-hidden="true">${t}</span>`;
+  return m ? `<span class="count open-top" aria-hidden="true"><small>0/</small>${m[1]}${mark}</span>` : `<span class="count" aria-hidden="true">${t}${mark}</span>`;
 }
 
 const TAB_STYLE_KEY = 'pw-tab-style';
 export function getTabStyle() { try { return localStorage.getItem(TAB_STYLE_KEY) || 'numbers'; } catch { return 'numbers'; } }
 export function setTabStyle(v) { try { localStorage.setItem(TAB_STYLE_KEY, v); } catch { /* storage blocked */ } }
 
-const registerMark = (it) => (it.register === 2 ? '+' : it.register === 3 ? '++' : '');
+const registerMark = (it) => octaveMark(it.register);
 
 export class TabView {
   constructor(container, { onSelect } = {}) {
@@ -91,6 +92,8 @@ export class TabView {
 
     // --- make room under each line of music by shifting later lines down
     const svg = scoreEl.querySelector('svg');
+    this.svg = svg;
+    this.wrap = wrap;
     let k = -1;
     const lineShift = new Map(); // abcjs line index -> shift in px
     for (const child of [...svg.children]) {
@@ -135,7 +138,7 @@ export class TabView {
       row.style.top = tabTop + 'px';
       row.style.height = TAB_H - 10 + 'px';
       wrap.appendChild(row);
-      this.lineBoxes.push({ top: L.top, bottom: tabTop + TAB_H - 10, refs: L.refs, row });
+      this.lineBoxes.push({ line: li, top: L.top, tabTop, bottom: tabTop + TAB_H - 10, refs: L.refs, row });
 
       const xs = L.refs.map((r) => {
         const g = r.el.abselem && r.el.abselem.elemset && r.el.abselem.elemset[0];
@@ -157,6 +160,8 @@ export class TabView {
         const it = r.item;
         if (it.invisible) return;
         const next = xs.slice(j + 1).find((v) => v != null) ?? lineEnd;
+        r.tabX = x;
+        r.tabNext = next;
         const cell = document.createElement('button');
         cell.type = 'button';
         cell.className = `cell ${it.type} style-${getTabStyle()}` + (it.halfHole ? ' half' : '') + (it.octaveShift ? ' shifted' : '') + (it.register > 1 ? ' upper' : '');
@@ -165,8 +170,10 @@ export class TabView {
         const len = beatsLabel(it.beats);
         if (it.type === 'note') {
           const shift = it.octaveShift ? `<span class="shift" title="Out of whistle range - played ${it.octaveShift > 0 ? 'an octave higher' : 'an octave lower'}">${it.octaveShift > 0 ? '8↑' : '8↓'}</span>` : '';
-          const fingering = getTabStyle() === 'holes' ? holesSVG(it.holes) : countHTML(it.holes);
-          cell.innerHTML = `<span class="nn">${it.name.replace('#', '♯').replace(/b$/, '♭')}</span>${fingering}<span class="reg">${registerMark(it) || '&nbsp;'}</span>${shift}`;
+          const fingering = getTabStyle() === 'holes'
+            ? `${holesSVG(it.holes)}<span class="reg">${registerMark(it) || '&nbsp;'}</span>`
+            : countHTML(it.holes, it.register);
+          cell.innerHTML = `<span class="nn">${it.name.replace('#', '♯').replace(/b$/, '♭')}</span>${fingering}${shift}`;
           cell.setAttribute('aria-label', `${it.pitch}, cover ${fingerNumbers(it.holes, it.register)}, ${len} beats${it.register > 1 ? ', blow harder' : ''}`);
         } else if (it.type === 'rest') {
           cell.innerHTML = `<span class="nn">&nbsp;</span><span class="rest-mark">rest</span>`;

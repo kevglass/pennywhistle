@@ -53,7 +53,7 @@ export function whistleFingering(midi) {
  * mouthpiece). "3" = hold holes 1-3. When the top hole is open the count follows
  * "0/": "0/2" = hold holes 2-3, "0/5" = holes 2-6. "0" = all open.
  * "½" after the count = also half-cover the next hole ("4½" = 1-4 plus half of 5).
- * "+" = blow harder (second octave), "++" = third octave.
+ * "'" = blow harder (high octave), "''" = third octave.
  */
 export function fingerNumbers(holes, register = 1) {
   const run = (from) => {
@@ -68,8 +68,11 @@ export function fingerNumbers(holes, register = 1) {
     // not a simple run from the top: list the held holes instead
     s = [...holes].map((c, i) => (c === 'X' ? i + 1 : c === 'H' ? `${i + 1}½` : '')).join('') || '0';
   }
-  return s + (register === 3 ? '++' : register === 2 ? '+' : '');
+  return s + octaveMark(register);
 }
+
+/** ' for the second (high) octave, '' for the third. */
+export const octaveMark = (register) => (register === 3 ? "''" : register === 2 ? "'" : '');
 
 // ------------------------------------------------------------ note names
 
@@ -447,8 +450,8 @@ export function tabDocument(data, { generatedChords }) {
   }));
   return {
     instrument: 'D tin whistle',
-    fingersLegend: 'fingers = how many holes to hold down from the top (nearest the mouthpiece): 3 = holes 1-3. 0/N = top hole open, hold the next N holes (0/2 = holes 2-3). 0 = all open. ½ after the count = also half-cover the next hole. + = blow harder (second octave).',
-    holesLegend: 'holes = the same fingering as six symbols, top to bottom: X = covered, O = open, H = half-covered. register 2 = blow harder (second octave).',
+    fingersLegend: "fingers = how many holes to hold down from the top (nearest the mouthpiece): 3 = holes 1-3. 0/N = top hole open, hold the next N holes (0/2 = holes 2-3). 0 = all open. ½ after the count = also half-cover the next hole. ' after it = blow harder (high octave).",
+    holesLegend: 'holes = the same fingering as six symbols, top to bottom: X = covered, O = open, H = half-covered. register 2 = blow harder (high octave).',
     beatsUnit: `1/${data.meter.den} note`,
     key: data.key,
     meter: `${data.meter.num}/${data.meter.den}`,
@@ -497,7 +500,7 @@ export function tabText(doc, { title = '', composer = '', barsPerLine = 4 } = {}
   head.push('');
   head.push('How to read: the number is how many holes to hold down, counting from the top (mouthpiece end).');
   head.push('  3 = hold holes 1, 2, 3    0/N = leave the top hole open and hold the next N (0/2 = holes 2-3)');
-  head.push('  0 = all holes open    + = blow harder (2nd octave)    ½ = also half-cover the next hole');
+  head.push("  0 = all holes open    ' = blow harder (high octave)    ½ = also half-cover the next hole");
   head.push('  (2) = length in beats, no brackets = 1 beat    R = rest    ~ = tied, keep holding into the next note');
   head.push('  |: :| = repeat    [1 [2 = first/second ending    Guitar chords are written above the notes.');
   lines.push(...head, '');

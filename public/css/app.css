@@ -1,33 +1,26 @@
 :root {
-  --bg: #f6f3ec;
-  --surface: #fffdf8;
-  --surface-2: #f0ebe0;
-  --ink: #1f2328;
-  --muted: #646a73;
-  --line: #ddd5c4;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f3f4f5;
+  --ink: #000000;
+  --muted: #555b63;
+  --line: #d8dadd;
   --accent: #1f6f5c;
   --accent-ink: #ffffff;
-  --accent-soft: #dcefe8;
+  --accent-soft: #e2f2ec;
   --hi: #d9480f;
-  --hi-soft: #ffe8d9;
-  --hole: #1f2328;
-  --hole-open: #fffdf8;
+  --hi-soft: #ffeadc;
+  --hole: #000000;
+  --hole-open: #ffffff;
   --upper: #6741d9;
   --warn: #b35c00;
-  --rest: #8c8f94;
-  --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.05);
+  --rest: #7c8086;
+  --shadow: 0 1px 2px rgba(0,0,0,.05), 0 3px 12px rgba(0,0,0,.05);
   --radius: 10px;
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   color-scheme: light;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #15171a; --surface: #1d2024; --surface-2: #262a2f; --ink: #e8e6e1; --muted: #9aa0a8;
-    --line: #353a41; --accent: #4fb89c; --accent-ink: #0d1f1a; --accent-soft: #1d3a32;
-    --hi: #ff8a4c; --hi-soft: #3d261a; --hole: #e8e6e1; --hole-open: #1d2024; --upper: #a78bfa;
-    --warn: #f0a050; --rest: #7c8189; color-scheme: dark;
-  }
-}
+/* Light is the default; dark only when chosen with the toggle (data-theme="dark"). */
 :root[data-theme="dark"] {
   --bg: #15171a; --surface: #1d2024; --surface-2: #262a2f; --ink: #e8e6e1; --muted: #9aa0a8;
   --line: #353a41; --accent: #4fb89c; --accent-ink: #0d1f1a; --accent-soft: #1d3a32;
@@ -50,7 +43,8 @@ h2 { font-size: 1.15rem; }
 .topbar { display: flex; align-items: center; gap: 16px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--surface); position: sticky; top: 0; z-index: 20; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--ink); text-decoration: none; }
 .brand svg { width: 26px; height: 26px; }
-.topbar nav { margin-left: auto; display: flex; gap: 8px; }
+.topbar nav { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.theme-toggle { width: 38px; justify-content: center; padding: 7px 0; font-size: 1rem; }
 
 main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 60px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
@@ -124,11 +118,12 @@ details > summary { cursor: pointer; font-weight: 600; }
 .cell:hover { background: var(--surface-2); }
 .cell.active { background: var(--hi-soft); border-color: var(--hi); }
 .cell .nn { font-size: 11px; font-weight: 700; line-height: 1.1; height: 13px; }
-.cell .reg { font-size: 15px; font-weight: 900; color: var(--upper); line-height: 1; height: 13px; }
+.cell .reg { font-size: 17px; font-weight: 900; color: var(--upper); line-height: 1; height: 13px; }
 .cell .shift { font-size: 9px; color: var(--warn); font-weight: 700; }
 .cell.upper .nn { color: var(--upper); }
 .cell.half .nn { text-decoration: underline dotted var(--warn); }
 .count { font: 800 15px/1.15 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; padding: 4px 0 2px; }
+.count .oct { color: var(--upper); font-weight: 900; }
 .count.open-top small { font-size: 10px; font-weight: 700; color: var(--warn); }
 .cell.active .count { color: var(--hi); }
 .cell.style-numbers .rest-mark, .cell.style-numbers .hold-mark { height: 30px; }

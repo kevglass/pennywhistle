@@ -40,7 +40,7 @@ let lastDisplay = '';
 let lastGenerated = false;
 let srcData = null;
 let transcription = null;
-let showOriginal = true;
+let showOriginal = false;
 
 const view = new TabView($('#preview'), {
   onSelect: (item, i, ctx) => {
@@ -188,7 +188,7 @@ async function loadPages(sources) {
     $('#thumbs').innerHTML = pages.map((p) => `<figure class="page"><img alt="${esc(p.label)}" src="${p.canvas.toDataURL('image/jpeg', 0.6)}"><figcaption>${esc(p.label)}</figcaption></figure>`).join('');
     $('#status').textContent = `${pages.length} page${pages.length === 1 ? '' : 's'} ready.`;
     $('#read').disabled = !pages.length || !window.__canTranscribe;
-    setOriginalVisible(true);
+    setOriginalVisible(false);
   } catch (e) {
     $('#status').innerHTML = `<span class="error">Could not open that file: ${esc(e.message)}</span>`;
   }

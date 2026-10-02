@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>New Whistle Tab</title>
+<script>try{if(localStorage.getItem('pw-theme')==='dark')document.documentElement.dataset.theme='dark'}catch(e){}</script>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/app.css">
 <script src="vendor/abcjs-basic-min.js"></script>
@@ -39,7 +40,7 @@
     <div class="approve-bar">
       <h2 id="h-review" style="margin:0">2. Check & adjust</h2>
       <div class="row">
-        <button class="btn" id="toggle-original" aria-pressed="true" hidden>Show original music</button>
+        <button class="btn" id="toggle-original" aria-pressed="false" hidden>Show original music</button>
       </div>
     </div>
     <div class="row">

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Whistle Tab</title>
+<script>try{if(localStorage.getItem('pw-theme')==='dark')document.documentElement.dataset.theme='dark'}catch(e){}</script>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/app.css">
 <script src="vendor/abcjs-basic-min.js"></script>
@@ -19,7 +20,8 @@
     <div class="actions">
       <button class="btn" id="toggle-original" aria-pressed="false" hidden>Show original music</button>
       <a class="btn" id="edit" href="#">Edit</a>
-      <a class="btn primary" id="txt" href="#" download>Download tab (.txt)</a>
+      <button class="btn primary" id="pdf" type="button">Download PDF</button>
+      <a class="btn" id="txt" href="#" download>Download tab (.txt)</a>
       <a class="btn" id="json" href="#" download>Download JSON</a>
       <button class="btn" id="print" type="button">Print</button>
       <button class="btn danger" id="delete" type="button">Delete</button>
@@ -80,11 +82,7 @@ const player = new Player(view, { onStop: () => { $('#play').textContent = '▶ 
 renderNow($('#now'), null);
 
 let tune, displayAbc, pagesLoaded = false;
-const PREF = 'pw-show-original';
-const pref = () => { try { return localStorage.getItem(PREF) === '1'; } catch { return false; } };
-
 async function setOriginal(show) {
-  try { localStorage.setItem(PREF, show ? '1' : '0'); } catch { /* storage blocked */ }
   const btn = $('#toggle-original');
   btn.setAttribute('aria-pressed', String(show));
   btn.textContent = show ? 'Hide original music' : 'Show original music';
@@ -125,6 +123,23 @@ try {
   $('#tabtext').textContent = text;
   $('#txt').href = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
   $('#txt').download = `${tune.id}-whistle-tab.txt`;
+  $('#pdf').addEventListener('click', async () => {
+    const btn = $('#pdf');
+    btn.disabled = true;
+    btn.textContent = 'Making PDF…';
+    try {
+      const { downloadPdf } = await import('./js/pdf.js');
+      await downloadPdf({
+        displayAbc, title: tune.title, composer: tune.composer, key: t.key, meter: t.meter,
+        chords: t.chordsUsed || [], textTab: text, filename: `${tune.id}-whistle-tab.pdf`,
+      });
+    } catch (e) {
+      alert('Could not make the PDF: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Download PDF';
+    }
+  });
   $('#copy').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(text); $('#copy').textContent = 'Copied'; }
     catch { $('#copy').textContent = 'Select the text to copy'; }
@@ -136,7 +151,6 @@ try {
   if (tune.originals?.length) {
     $('#toggle-original').hidden = false;
     $('#toggle-original').addEventListener('click', () => setOriginal($('#original').hidden));
-    if (pref()) setOriginal(true);
   }
 } catch (e) {
   $('#title').textContent = 'Tune not found';
