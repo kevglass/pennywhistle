@@ -284,33 +284,97 @@ function audio() {
   return ctx;
 }
 
-/** A breathy, whistle-like tone. Whistles sound an octave above written pitch. */
-export function tone(midi, start, dur, gainLevel = 0.18) {
-  const a = audio();
-  const t0 = start ?? a.currentTime;
+// Shared white-noise buffer for breath and the attack "chiff".
+let noiseBuf = null;
+function noise(a) {
+  if (!noiseBuf || noiseBuf.sampleRate !== a.sampleRate) {
+    noiseBuf = a.createBuffer(1, a.sampleRate * 2, a.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  const src = a.createBufferSource();
+  src.buffer = noiseBuf;
+  src.loop = true;
+  return src;
+}
+
+// Tin-whistle timbre: strong fundamental, weak upper partials.
+let whistleWave = null;
+function wave(a) {
+  if (!whistleWave || whistleWave.context !== a) {
+    const real = new Float32Array([0, 1, 0.16, 0.06, 0.025, 0.01]);
+    whistleWave = a.createPeriodicWave(real, new Float32Array(real.length));
+    whistleWave.context = a;
+  }
+  return whistleWave;
+}
+
+/**
+ * A penny-whistle note: a pure, slightly breathy tone with an air "chiff" and a
+ * small pitch scoop at the start, and gentle vibrato on longer notes.
+ * A D whistle sounds an octave above the written pitch.
+ */
+export function tone(midi, start, dur, level = 0.2, context = null) {
+  const a = context || audio(); // context: e.g. an OfflineAudioContext for rendering
+  const t0 = Math.max(start ?? a.currentTime, a.currentTime);
   const f = 440 * Math.pow(2, (midi + 12 - 69) / 12);
+  const end = t0 + Math.max(0.07, dur - 0.025); // tiny gap so repeated notes are tongued
+  const out = a.createGain();
+  out.gain.value = 1;
+  const lp = a.createBiquadFilter(); // soften the top end like a real whistle bore
+  lp.type = 'lowpass';
+  lp.frequency.value = Math.min(12000, f * 6);
+  lp.connect(out);
+  out.connect(a.destination);
+
+  // tone
   const osc = a.createOscillator();
-  const osc2 = a.createOscillator();
-  const g = a.createGain();
-  const g2 = a.createGain();
+  osc.setPeriodicWave(wave(a));
+  osc.frequency.setValueAtTime(f * 0.985, t0); // breathy scoop up into the note
+  osc.frequency.exponentialRampToValueAtTime(f, t0 + 0.035);
   const vib = a.createOscillator();
-  const vibG = a.createGain();
-  osc.type = 'sine';
-  osc2.type = 'triangle';
-  osc.frequency.value = f;
-  osc2.frequency.value = f;
-  g2.gain.value = 0.25;
-  vib.frequency.value = 5.5;
-  vibG.gain.setValueAtTime(0, t0);
-  vibG.gain.linearRampToValueAtTime(f * 0.006, t0 + Math.min(0.35, dur));
-  vib.connect(vibG); vibG.connect(osc.frequency); vibG.connect(osc2.frequency);
-  osc.connect(g); osc2.connect(g2); g2.connect(g); g.connect(a.destination);
-  const end = t0 + Math.max(0.06, dur - 0.02);
+  const vibDepth = a.createGain();
+  vib.frequency.value = 5.2;
+  vibDepth.gain.setValueAtTime(0, t0);
+  if (dur > 0.45) { // only longer notes get vibrato, and it fades in
+    vibDepth.gain.setValueAtTime(0, t0 + 0.25);
+    vibDepth.gain.linearRampToValueAtTime(f * 0.0045, t0 + Math.min(0.7, dur));
+  }
+  vib.connect(vibDepth).connect(osc.frequency);
+  const g = a.createGain();
   g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(gainLevel, t0 + 0.025);
-  g.gain.setValueAtTime(gainLevel, Math.max(t0 + 0.03, end - 0.04));
+  g.gain.exponentialRampToValueAtTime(level * 1.15, t0 + 0.018);
+  g.gain.exponentialRampToValueAtTime(level, t0 + 0.07);
+  g.gain.setValueAtTime(level, Math.max(t0 + 0.07, end - 0.03));
   g.gain.exponentialRampToValueAtTime(0.0001, end);
-  for (const o of [osc, osc2, vib]) { o.start(t0); o.stop(end + 0.05); }
+  osc.connect(g).connect(lp);
+
+  // steady breath noise, tuned around the note
+  const breath = noise(a);
+  const bp = a.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = f;
+  bp.Q.value = 6;
+  const bg = a.createGain();
+  bg.gain.setValueAtTime(0.0001, t0);
+  bg.gain.exponentialRampToValueAtTime(level * 0.35, t0 + 0.02);
+  bg.gain.setValueAtTime(level * 0.35, Math.max(t0 + 0.02, end - 0.03));
+  bg.gain.exponentialRampToValueAtTime(0.0001, end);
+  breath.connect(bp).connect(bg).connect(lp);
+
+  // attack "chiff": a short burst of air above the note
+  const chiff = noise(a);
+  const hp = a.createBiquadFilter();
+  hp.type = 'bandpass';
+  hp.frequency.value = Math.min(9000, f * 3);
+  hp.Q.value = 1.2;
+  const cg = a.createGain();
+  cg.gain.setValueAtTime(0.0001, t0);
+  cg.gain.exponentialRampToValueAtTime(level * 0.5, t0 + 0.006);
+  cg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.05);
+  chiff.connect(hp).connect(cg).connect(lp);
+
+  for (const node of [osc, vib, breath, chiff]) { node.start(t0); node.stop(end + 0.05); }
 }
 
 export class Player {

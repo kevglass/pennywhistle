@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>New Whistle Tab</title>
 <script>try{if(localStorage.getItem('pw-theme')==='dark')document.documentElement.dataset.theme='dark'}catch(e){}</script>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/app.css">
 <script src="vendor/abcjs-basic-min.js"></script>
 </head>
-<body>
+<body class="has-player">
 <div id="top"></div>
 <main class="stack">
   <div>
@@ -40,7 +40,7 @@
     <div class="approve-bar">
       <h2 id="h-review" style="margin:0">2. Check & adjust</h2>
       <div class="row">
-        <button class="btn" id="toggle-original" aria-pressed="false" hidden>Show original music</button>
+        <button class="btn" id="toggle-original" aria-pressed="false" hidden>Show original</button>
       </div>
     </div>
     <div class="row">
@@ -64,8 +64,11 @@
         <div class="player">
           <div class="controls">
             <button class="btn" id="play" type="button">▶ Play</button>
-            <label for="tempo">Tempo</label><input type="range" id="tempo" min="30" max="220" value="90"><span id="tempo-v" class="small">90</span>
-            <span id="style" class="small"></span>
+            <button class="btn settings-toggle" type="button" aria-expanded="false" aria-label="Player settings">⚙</button>
+            <div class="settings">
+              <label for="tempo">Tempo</label><input type="range" id="tempo" min="30" max="220" value="90"><span id="tempo-v" class="small">90</span>
+              <span id="style" class="small"></span>
+            </div>
           </div>
           <div class="now" id="now"></div>
         </div>

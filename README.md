@@ -4,8 +4,9 @@ Turn sheet music (PDF or photos/scans) into easy-to-follow **D tin whistle tabla
 
 - Upload a PDF or image files. Claude reads the music and transcribes the melody.
 - The engraved score is shown with a whistle tab row under every line. Each note shows **how many holes to hold down from the top** (`3` = holes 1–3; `0/2` = top hole open, hold the next 2; `0` = all open; `'` after the number = blow harder for the high octave; `½` = also half-cover the next hole), or hole diagrams if you prefer, plus a bar for how long it lasts. Rests and tied notes are marked too.
-- Each saved tune has a **plain-text number tab** (guitar chords above the numbers, bar lines, note lengths, rests) to copy or download as `.txt`. **Download PDF** gives the score with the number tab under every line, guitar chord diagrams and the text tab. There's also a JSON download.
+- **Download PDF** gives the score with the number tab under every line and guitar chord diagrams. There's also a JSON download.
 - Light mode by default, with a dark-mode toggle in the top bar.
+- Works on phones and tablets: on a phone the player becomes a compact bar at the bottom of the screen, and **Play** uses a synthesised tin-whistle sound (breathy tone, air "chiff" on each note, gentle vibrato).
 - Click any note in the score (or in the tab) to highlight its fingering and see it enlarged with the guitar chord for that spot. The ← → keys step through the notes and **Play** plays the tune, following repeats.
 - Chords come from the score when it prints them. Otherwise the app suggests chords that fit each bar.
 - **Best key for whistle** finds a transposition that keeps every note in range with as little half-holing as possible.
@@ -73,7 +74,6 @@ Each approved tune is a folder:
 ```
 data/tunes/<id>/
   tune.json        everything about the tune (see below)
-  tune.txt         the plain-text number tab (what "Download tab (.txt)" gives you)
   tune.abc         the displayed notation (after transposing and adding chords)
   original-1.pdf   the uploaded original(s): .pdf / .png / .jpg …
 ```

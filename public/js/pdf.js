@@ -1,5 +1,5 @@
 // "Download PDF": the score with the whistle number tab under every line (vector),
-// guitar chord diagrams, and the plain-text tab. Built in the browser with jsPDF + svg2pdf.
+// and guitar chord diagrams. Built in the browser with jsPDF + svg2pdf.
 import { TabView, beatsLabel, getTabStyle } from './render.js';
 import { fingerNumbers, markFor } from './core.js';
 import { chordDiagramSVG } from './guitar.js';
@@ -100,7 +100,7 @@ function chordSVG(name) {
   return svg;
 }
 
-export async function downloadPdf({ displayAbc, title, composer, key, meter, chords = [], textTab = '', filename = 'whistle-tab.pdf' }) {
+export async function downloadPdf({ displayAbc, title, composer, key, meter, chords = [], filename = 'whistle-tab.pdf' }) {
   await loadScript('../vendor/jspdf.umd.min.js');
   await loadScript('../vendor/svg2pdf.umd.min.js');
   const { jsPDF } = window.jspdf;
@@ -178,25 +178,6 @@ export async function downloadPdf({ displayAbc, title, composer, key, meter, cho
       y += size * 92 / 74 + 4;
     }
 
-    if (textTab) {
-      const lines = pdfText(textTab).split('\n');
-      const longest = Math.max(...lines.map((l) => l.length), 1);
-      const fs = Math.min(8.5, W / (longest * 0.6 * 0.3528)); // Courier glyphs are 0.6em wide
-      const lh = fs * 0.3528 * 1.35;
-      if (y + 20 > PH - M) { doc.addPage(); y = M; }
-      y += 4;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
-      doc.text('Whistle tab (text)', M, y);
-      y += 5;
-      doc.setFont('courier', 'normal');
-      doc.setFontSize(fs);
-      for (const line of lines) {
-        if (y + lh > PH - M) { doc.addPage(); y = M; }
-        doc.text(line, M, y);
-        y += lh;
-      }
-    }
 
     const pages = doc.internal.getNumberOfPages();
     doc.setFont('helvetica', 'normal');

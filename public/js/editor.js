@@ -1,4 +1,4 @@
-import { analyzeTune, buildDisplayAbc, bestTranspose, whistleStats, cleanAbc, tabDocument, tabText, transposedKeyName } from './core.js';
+import { analyzeTune, buildDisplayAbc, bestTranspose, whistleStats, cleanAbc, tabDocument, transposedKeyName } from './core.js';
 import { TabView, Player, tone, defaultBpm } from './render.js';
 import { renderPages, pagesToImages, showPages, ACCEPTED } from './originals.js';
 import { $, api, apiUrl, esc, topbar, renderNow, originalSources, tabStyleControl } from './ui.js';
@@ -149,8 +149,16 @@ $('#title').addEventListener('change', () => {
   $('#abc').value = /^T:.*$/m.test(abc) ? abc.replace(/^T:.*$/m, 'T:' + t) : abc.replace(/^(X:.*\n)/m, `$1T:${t}\n`);
   update();
 });
+// Re-lay out only when the width changes (phones fire resize as the address bar slides).
 let resizeTimer;
-window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (lastDisplay) view.render(lastDisplay); }, 250); });
+let lastWidth = $('#preview').clientWidth;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const w = $('#preview').clientWidth;
+    if (w !== lastWidth && lastDisplay) { lastWidth = w; view.render(lastDisplay); }
+  }, 250);
+});
 
 // playback
 $('#tempo').addEventListener('input', () => { $('#tempo').dataset.touched = '1'; $('#tempo-v').textContent = $('#tempo').value; });
@@ -172,7 +180,7 @@ function setOriginalVisible(v) {
   const has = pages.length > 0;
   $('#toggle-original').hidden = !has;
   $('#toggle-original').setAttribute('aria-pressed', String(v));
-  $('#toggle-original').textContent = v ? 'Hide original music' : 'Show original music';
+  $('#toggle-original').textContent = v ? 'Hide original' : 'Show original';
   $('#original').hidden = !(v && has);
   $('#split').classList.toggle('with-original', v && has);
   if (lastDisplay) view.render(lastDisplay);
@@ -292,7 +300,6 @@ $('#save').addEventListener('click', async () => {
       tab: tabDocument(view.data, { generatedChords: lastGenerated }),
       transcription,
     };
-    body.tabText = tabText(body.tab, { title: body.title, composer: body.composer });
     // multipart: JSON metadata plus the original files
     const form = new FormData();
     form.append('meta', JSON.stringify(body));

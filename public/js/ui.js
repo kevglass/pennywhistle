@@ -86,6 +86,18 @@ function themeButton() {
   const dark = isDark();
   return `<button class="btn theme-toggle" id="theme-toggle" type="button" aria-pressed="${dark}" title="Switch to ${dark ? 'light' : 'dark'} mode" aria-label="Dark mode">${dark ? '☀' : '☾'}</button>`;
 }
+// Small-screen helpers: player settings toggle, and closing the "More" menu on outside taps.
+document.addEventListener('click', (e) => {
+  const st = e.target.closest('.settings-toggle');
+  if (st) {
+    const player = st.closest('.player');
+    const open = !player.classList.contains('show-settings');
+    player.classList.toggle('show-settings', open);
+    st.setAttribute('aria-expanded', String(open));
+  }
+  document.querySelectorAll('details.more[open]').forEach((d) => { if (!d.contains(e.target)) d.open = false; });
+});
+
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('#theme-toggle');
   if (!btn) return;
@@ -98,8 +110,8 @@ document.addEventListener('click', (e) => {
 
 export function topbar(active) {
   return `<header class="topbar">
-    <a class="brand" href="./"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="13" width="26" height="6" rx="3" fill="var(--accent)"/><circle cx="12" cy="16" r="1.6" fill="var(--surface)"/><circle cx="17" cy="16" r="1.6" fill="var(--surface)"/><circle cx="22" cy="16" r="1.6" fill="var(--surface)"/><rect x="3" y="13" width="5" height="6" rx="2" fill="var(--ink)"/></svg>Penny Whistle Tabs</a>
-    <nav><a class="btn ${active === 'library' ? 'primary' : ''}" href="./">Library</a><a class="btn ${active === 'new' ? 'primary' : ''}" href="editor.html">+ New tab</a>${themeButton()}</nav>
+    <a class="brand" href="./" aria-label="Penny Whistle Tabs: library"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="13" width="26" height="6" rx="3" fill="var(--accent)"/><circle cx="12" cy="16" r="1.6" fill="var(--surface)"/><circle cx="17" cy="16" r="1.6" fill="var(--surface)"/><circle cx="22" cy="16" r="1.6" fill="var(--surface)"/><rect x="3" y="13" width="5" height="6" rx="2" fill="var(--ink)"/></svg><span class="brand-long">Penny Whistle Tabs</span><span class="brand-short">Whistle Tabs</span></a>
+    <nav><a class="btn ${active === 'library' ? 'primary' : ''}" href="./">Library</a><a class="btn ${active === 'new' ? 'primary' : ''}" href="editor.html"><span class="brand-long">+ New tab</span><span class="brand-short">+ New</span></a>${themeButton()}</nav>
   </header>`;
 }
 

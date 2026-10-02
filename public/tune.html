@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Whistle Tab</title>
 <script>try{if(localStorage.getItem('pw-theme')==='dark')document.documentElement.dataset.theme='dark'}catch(e){}</script>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/app.css">
 <script src="vendor/abcjs-basic-min.js"></script>
 </head>
-<body>
+<body class="has-player">
 <div id="top"></div>
 <main>
   <div class="tune-head">
@@ -18,13 +18,17 @@
       <div id="meta" class="badges"></div>
     </div>
     <div class="actions">
-      <button class="btn" id="toggle-original" aria-pressed="false" hidden>Show original music</button>
+      <button class="btn" id="toggle-original" aria-pressed="false" hidden>Show original</button>
+      <button class="btn primary" id="pdf" type="button"><span class="wide-only">Download&nbsp;</span>PDF</button>
       <a class="btn" id="edit" href="#">Edit</a>
-      <button class="btn primary" id="pdf" type="button">Download PDF</button>
-      <a class="btn" id="txt" href="#" download>Download tab (.txt)</a>
-      <a class="btn" id="json" href="#" download>Download JSON</a>
-      <button class="btn" id="print" type="button">Print</button>
-      <button class="btn danger" id="delete" type="button">Delete</button>
+      <details class="more">
+        <summary class="btn" aria-label="More actions">⋯ More</summary>
+        <div class="menu">
+          <a class="btn" id="json" href="#" download>Download JSON</a>
+          <button class="btn" id="print" type="button">Print</button>
+          <button class="btn danger" id="delete" type="button">Delete</button>
+        </div>
+      </details>
     </div>
   </div>
 
@@ -34,24 +38,20 @@
       <div class="player">
         <div class="controls">
           <button class="btn" id="play" type="button">▶ Play</button>
-          <label for="tempo">Tempo</label><input type="range" id="tempo" min="30" max="220" value="90"><span id="tempo-v" class="small">90</span>
-          <span id="style" class="small"></span>
-          <label class="small"><input type="checkbox" id="sound" checked> Sound on click</label>
+          <button class="btn settings-toggle" type="button" aria-expanded="false" aria-label="Player settings">⚙</button>
+          <div class="settings">
+            <label for="tempo">Tempo</label><input type="range" id="tempo" min="30" max="220" value="90"><span id="tempo-v" class="small">90</span>
+            <span id="style" class="small"></span>
+            <label class="small check"><input type="checkbox" id="sound" checked> Sound on click</label>
+          </div>
         </div>
         <div class="now" id="now"></div>
       </div>
       <div id="tab"></div>
-      <p class="muted small no-print">Tip: click any note in the music or the tab to see its fingering. Use ← → to step through the notes.</p>
+      <p class="muted small no-print">Tip: tap any note in the music or the tab to see its fingering.<span class="kbd-tip"> Use ← → to step through the notes.</span></p>
     </div>
   </div>
 
-  <section class="card stack" style="margin-top:16px" aria-labelledby="h-text">
-    <div class="approve-bar">
-      <h2 id="h-text" style="margin:0">Whistle tab (text)</h2>
-      <div class="row no-print"><button class="btn" id="copy" type="button">Copy</button></div>
-    </div>
-    <pre id="tabtext" class="tabtext"></pre>
-  </section>
   <section class="card stack" style="margin-top:16px">
     <h2>Guitar chords in this tune</h2>
     <div id="chords" class="chord-list"></div>
@@ -63,7 +63,7 @@
 </main>
 
 <script type="module">
-import { buildDisplayAbc, tabDocument, tabText } from './js/core.js';
+import { buildDisplayAbc } from './js/core.js';
 import { TabView, Player, tone, defaultBpm } from './js/render.js';
 import { renderPages, showPages } from './js/originals.js';
 import { $, api, esc, topbar, renderNow, renderChordList, renderLegend, originalSources, tabStyleControl } from './js/ui.js';
@@ -85,7 +85,7 @@ let tune, displayAbc, pagesLoaded = false;
 async function setOriginal(show) {
   const btn = $('#toggle-original');
   btn.setAttribute('aria-pressed', String(show));
-  btn.textContent = show ? 'Hide original music' : 'Show original music';
+  btn.textContent = show ? 'Hide original' : 'Show original';
   $('#original').hidden = !show;
   $('#split').classList.toggle('with-original', show);
   if (show && !pagesLoaded) {
@@ -117,33 +117,23 @@ try {
   view.render(displayAbc);
   renderChordList($('#chords'), t.chordsUsed || []);
   tabStyleControl($('#style'), () => view.render(displayAbc));
-  // Text tab, built from the rendered tune so older saves get it too.
-  const doc = tabDocument(view.data, { generatedChords: (t.measures || []).some((m) => m.chords?.some((c) => c.source === 'generated')) });
-  const text = tabText(doc, { title: tune.title, composer: tune.composer });
-  $('#tabtext').textContent = text;
-  $('#txt').href = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
-  $('#txt').download = `${tune.id}-whistle-tab.txt`;
   $('#pdf').addEventListener('click', async () => {
     const btn = $('#pdf');
     btn.disabled = true;
+    const label = btn.innerHTML;
     btn.textContent = 'Making PDF…';
     try {
       const { downloadPdf } = await import('./js/pdf.js');
       await downloadPdf({
         displayAbc, title: tune.title, composer: tune.composer, key: t.key, meter: t.meter,
-        chords: t.chordsUsed || [], textTab: text, filename: `${tune.id}-whistle-tab.pdf`,
+        chords: t.chordsUsed || [], filename: `${tune.id}-whistle-tab.pdf`,
       });
     } catch (e) {
       alert('Could not make the PDF: ' + e.message);
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Download PDF';
+      btn.innerHTML = label;
     }
-  });
-  $('#copy').addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText(text); $('#copy').textContent = 'Copied'; }
-    catch { $('#copy').textContent = 'Select the text to copy'; }
-    setTimeout(() => { $('#copy').textContent = 'Copy'; }, 1800);
   });
   $('#tempo').value = defaultBpm(view.visual);
   $('#tempo-v').textContent = $('#tempo').value;
@@ -176,8 +166,15 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowLeft') { view.step(-1); e.preventDefault(); }
   if (e.key === ' ') { $('#play').click(); e.preventDefault(); }
 });
-let rt;
-window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => displayAbc && view.render(displayAbc), 250); });
+// Re-lay out only when the width changes (phones fire resize as the address bar slides).
+let rt, lastWidth = $('#tab').clientWidth;
+window.addEventListener('resize', () => {
+  clearTimeout(rt);
+  rt = setTimeout(() => {
+    const w = $('#tab').clientWidth;
+    if (w !== lastWidth && displayAbc) { lastWidth = w; view.render(displayAbc); }
+  }, 250);
+});
 </script>
 </body>
 </html>
