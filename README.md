@@ -18,10 +18,10 @@ Any web host with **PHP 8.1+** (Apache or nginx). The pages are static HTML/JS. 
 ```bash
 composer install            # PHP packages (Anthropic SDK)
 cp .env.example .env        # add ANTHROPIC_API_KEY (or: composer secrets:decrypt)
-./dev.sh                    # PHP built-in server on PORT from .env (default 6000)
+./dev.sh                    # PHP built-in server on http://localhost:6060 (PORT in .env)
 ```
 
-Note: Chrome, Firefox and Safari refuse to open port 6000 (it's reserved for X11). If the page won't load, run `PORT=6060 ./dev.sh` or change `PORT` in `.env`. Without an API key the app still works: you can enter or paste ABC notation by hand.
+Avoid ports browsers block as unsafe (e.g. 6000, 6665-6669). Without an API key the app still works: you can enter or paste ABC notation by hand.
 
 | Setting (in `.env`) | Purpose |
 | --- | --- |
