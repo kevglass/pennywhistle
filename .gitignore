@@ -1,5 +1,28 @@
-/vendor/
-/data/
+# Secrets: only the encrypted copy (.env.enc) is committed
 .env
-.DS_Store
+.env.*
+!.env.example
+!.env.enc
+
+# Composer packages (installed with `composer install`)
+/vendor/
 composer.phar
+
+# Saved tunes from local development
+/data/
+
+# Node tooling, if used for testing
+node_modules/
+
+# OS / editor clutter
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# Logs and temporary files
+*.log
+*.tmp
+.phpunit.result.cache
