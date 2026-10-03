@@ -20,7 +20,7 @@
         <label for="tempo">Tempo</label><input type="range" id="tempo" min="30" max="220" value="90"><span id="tempo-v" class="small">90</span>
         <label for="instrument">Instrument</label><select id="instrument"></select>
         <span id="style" class="small"></span>
-        <label class="small check"><input type="checkbox" id="guitar"> Guitar chords</label>
+        <span class="check"><label class="small check"><input type="checkbox" id="guitar"> Chords</label><select id="chord-instrument" aria-label="Chord instrument" title="Instrument that plays the chords" hidden></select></span>
       </div>
     </div>
     <div class="now" id="now"></div>
@@ -84,7 +84,7 @@
       <div class="field" style="flex:1;min-width:200px"><label for="title">Title</label><input type="text" id="title"></div>
       <div class="field"><label for="transpose">Key for whistle</label><select id="transpose"></select></div>
       <button class="btn" id="bestfit" type="button" title="Pick the key that fits the D whistle best">Best key for whistle</button>
-      <div class="field"><label for="chords">Guitar chords</label>
+      <div class="field"><label for="chords">Chords</label>
         <select id="chords">
           <option value="auto">From score, or suggest if none printed</option>
           <option value="score">Only chords printed in the score</option>

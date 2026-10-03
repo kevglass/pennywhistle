@@ -1,8 +1,8 @@
 // "Download PDF": the score with the whistle number tab under every line (vector),
-// and guitar chord diagrams. Built in the browser with jsPDF + svg2pdf.
+// and chord diagrams for the chosen chord instrument. Built in the browser with jsPDF + svg2pdf.
 import { TabView, getTabStyle, getShowNoteNames } from './render.js';
 import { fingerNumbers, markFor } from './core.js';
-import { chordDiagramSVG } from './guitar.js';
+import { chordDiagramSVG, CHORD_INSTRUMENTS, getChordInstrument } from './guitar.js';
 import { loadScript } from './ui.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -60,9 +60,9 @@ function drawTabRow(svg, view, box, width) {
 }
 
 /** Chord box diagram with inline styling (the on-screen version styles via CSS classes). */
-function chordSVG(name) {
+function chordSVG(name, instrument) {
   const wrap = document.createElement('div');
-  wrap.innerHTML = chordDiagramSVG(pdfText(name));
+  wrap.innerHTML = chordDiagramSVG(pdfText(name), instrument);
   const svg = wrap.firstElementChild;
   const styles = {
     'cd-name': { fill: C.ink, 'font-family': 'helvetica', 'font-weight': 'bold', 'font-size': 12 },
@@ -81,7 +81,7 @@ function chordSVG(name) {
   return svg;
 }
 
-export async function downloadPdf({ displayAbc, title, composer, key, meter, chords = [], filename = 'whistle-tab.pdf' }) {
+export async function downloadPdf({ displayAbc, title, composer, key, meter, chords = [], chordInstrument = getChordInstrument(), filename = 'whistle-tab.pdf' }) {
   await loadScript('../vendor/jspdf.umd.min.js');
   await loadScript('../vendor/svg2pdf.umd.min.js');
   const { jsPDF } = window.jspdf;
@@ -140,23 +140,25 @@ export async function downloadPdf({ displayAbc, title, composer, key, meter, cho
     }
 
     if (chords.length) {
-      const size = 22, perRow = Math.floor(W / (size + 3));
+      const unit = 22 / 74; // mm per diagram pixel: a guitar diagram is 22 mm wide
+      const cw = (24 + (CHORD_INSTRUMENTS[chordInstrument].tuning.length - 1) * 10) * unit, ch = 92 * unit;
+      const perRow = Math.floor(W / (cw + 3));
       const rows = Math.ceil(chords.length / perRow);
-      if (y + 8 + rows * (size * 92 / 74 + 2) > PH - M) { doc.addPage(); y = M; }
+      if (y + 8 + rows * (ch + 2) > PH - M) { doc.addPage(); y = M; }
       y += 4;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
-      doc.text('Guitar chords', M, y);
+      doc.text(`${CHORD_INSTRUMENTS[chordInstrument].label} chords`, M, y);
       y += 3;
       for (let i = 0; i < chords.length; i++) {
-        const svg = chordSVG(chords[i]);
+        const svg = chordSVG(chords[i], chordInstrument);
         host.appendChild(svg);
         const col = i % perRow;
-        if (i && col === 0) y += size * 92 / 74 + 2;
-        await doc.svg(svg, { x: M + col * (size + 3), y, width: size, height: size * 92 / 74 });
+        if (i && col === 0) y += ch + 2;
+        await doc.svg(svg, { x: M + col * (cw + 3), y, width: cw, height: ch });
         svg.remove();
       }
-      y += size * 92 / 74 + 4;
+      y += ch + 4;
     }
 
 

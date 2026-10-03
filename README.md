@@ -4,10 +4,11 @@ Turn sheet music (PDF or photos/scans) into easy-to-follow **D tin whistle tabla
 
 - Upload a PDF or image files. PDFs exported from **MuseScore 4** are read directly, with no AI: the notes come straight out of the PDF. Anything else (scans, photos, other programs' PDFs) is read by Claude, which transcribes the melody.
 - The engraved score is shown with a whistle tab row under every line. Each note shows **how many holes to hold down from the top** (`3` = holes 1–3; `0/2` = top hole open, hold the next 2; `0` = all open; `'` after the number = blow harder for the high octave; `½` = also half-cover the next hole), or hole diagrams if you prefer, plus a bar for how long it lasts. Rests and tied notes are marked too.
-- **Download PDF** gives the score with the number tab under every line and guitar chord diagrams. There's also a JSON download.
+- **Download PDF** gives the score with the number tab under every line and chord diagrams. There's also a JSON download.
 - Light mode by default, with a dark-mode toggle in the top bar.
 - A thin player bar fixed to the top of the screen (play, tempo, tab style, and the selected note's fingering and chord) collapses to a small icon at the top left. **Play** and tapping a note use recordings of a real D tin whistle (see Credits). Works on phones and tablets.
 - Click any note in the score (or in the tab) to highlight its fingering and see it enlarged with the guitar chord for that spot. The ← → keys step through the notes and **Play** plays the tune, following repeats.
+- Tick **Chords** in the player to strum the chords under the tune, and pick the instrument beside it: guitar, mandolin, mandola, Irish bouzouki, tenor banjo (GDAE), 5-string banjo or ukulele (standard or baritone). The chord diagrams on the tune page and in the PDF are drawn for the same instrument. Guitar shapes are the usual open and barre chords; the others are worked out from each instrument's tuning (the easiest shape low on the neck, with the root in the bass where it can be). The choice is remembered.
 - Chords come from the score when it prints them. Otherwise the app suggests chords that fit each bar.
 - **Best key for whistle** finds a transposition that keeps every note in range with as little half-holing as possible.
 - Approving a tab saves it to the **library** (the index page). Saved tunes can be opened later, with an optional **Show original music** panel beside the tab.

@@ -1,6 +1,6 @@
 import { holesSVG, beatsLabel, getTabStyle, setTabStyle, getShowNoteNames, setShowNoteNames, INSTRUMENTS, getInstrument, setInstrument } from './render.js';
 import { fingerNumbers, markFor } from './core.js';
-import { chordDiagramSVG } from './guitar.js';
+import { chordDiagramSVG, CHORD_INSTRUMENTS, getChordInstrument, setChordInstrument } from './guitar.js';
 
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -116,13 +116,15 @@ export function renderNow(el, item, { chord } = {}) {
   } else {
     html = `<span class="n-name">Hold</span><span class="n-sub">keep the note going, ${len} ${beatWord}</span>`;
   }
-  if (chord) html += `<span class="n-chord" title="Guitar chord">${esc(chord)}</span>`;
+  if (chord) html += `<span class="n-chord" title="Chord">${esc(chord)}</span>`;
   el.innerHTML = html;
 }
 
+/** Diagrams of the chords on the chosen chord instrument. */
 export function renderChordList(el, names) {
+  const inst = getChordInstrument();
   el.innerHTML = names.length
-    ? names.map((n) => `<figure>${chordDiagramSVG(n)}</figure>`).join('')
+    ? names.map((n) => `<figure>${chordDiagramSVG(n, inst)}</figure>`).join('')
     : '<p class="muted">No chords.</p>';
 }
 
@@ -136,6 +138,16 @@ export function tabStyleControl(el, onChange) {
   const names = el.querySelector('#note-names');
   names.checked = getShowNoteNames();
   names.addEventListener('change', () => { setShowNoteNames(names.checked); onChange(); });
+}
+
+/** The instrument that plays the chords, picked beside the Chords box and shown while it is ticked; the choice is remembered. */
+export function chordInstrumentControl(box, sel, onChange) {
+  sel.innerHTML = Object.entries(CHORD_INSTRUMENTS).map(([id, i]) => `<option value="${id}">${esc(i.label)}</option>`).join('');
+  sel.value = getChordInstrument();
+  const show = () => { sel.hidden = !box.checked; };
+  show();
+  box.addEventListener('change', show);
+  sel.addEventListener('change', () => { setChordInstrument(sel.value); onChange(); });
 }
 
 /** The player's instrument picker (the penny whistle first); the choice is remembered. */

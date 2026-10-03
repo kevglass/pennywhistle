@@ -1,4 +1,4 @@
-// "Download MP3": the tune as the player sounds it (tempo, instrument, guitar chords), rendered
+// "Download MP3": the tune as the player sounds it (tempo, instrument, chords), rendered
 // offline with the Web Audio API and encoded in the browser with lamejs.
 import { renderTune } from './render.js';
 import { loadScript } from './ui.js';

@@ -20,9 +20,9 @@
         <label for="tempo">Tempo</label><input type="range" id="tempo" min="30" max="220" value="90"><span id="tempo-v" class="small">90</span>
         <label for="instrument">Instrument</label><select id="instrument"></select>
         <span id="style" class="small"></span>
-        <label class="small check"><input type="checkbox" id="guitar"> Guitar chords</label>
+        <span class="check"><label class="small check"><input type="checkbox" id="guitar"> Chords</label><select id="chord-instrument" aria-label="Chord instrument" title="Instrument that plays the chords" hidden></select></span>
         <label class="small check"><input type="checkbox" id="sound" checked> Sound on click</label>
-        <button class="btn mp3" type="button" title="The tune as Play sounds it: this tempo and instrument, with guitar chords if they are on">⬇ MP3</button>
+        <button class="btn mp3" type="button" title="The tune as Play sounds it: this tempo and instrument, with the chords if they are on">⬇ MP3</button>
       </div>
     </div>
     <div class="now" id="now"></div>
@@ -41,7 +41,7 @@
       <details class="more">
         <summary class="btn" aria-label="More actions">⋯ More</summary>
         <div class="menu">
-          <button class="btn mp3" type="button" title="The tune as Play sounds it: the current tempo and instrument, with guitar chords if they are on">Download MP3</button>
+          <button class="btn mp3" type="button" title="The tune as Play sounds it: the current tempo and instrument, with the chords if they are on">Download MP3</button>
           <a class="btn" id="json" href="#" download>Download JSON</a>
           <button class="btn" id="print" type="button">Print</button>
           <button class="btn danger" id="delete" type="button">Delete</button>
@@ -59,7 +59,7 @@
   </div>
 
   <section class="card stack" style="margin-top:16px">
-    <h2>Guitar chords in this tune</h2>
+    <h2 id="chords-head">Guitar chords in this tune</h2>
     <div id="chords" class="chord-list"></div>
   </section>
 </main>
@@ -67,8 +67,9 @@
 <script type="module">
 import { buildDisplayAbc } from './js/core.js';
 import { TabView, Player, tone, defaultBpm } from './js/render.js';
+import { CHORD_INSTRUMENTS, getChordInstrument } from './js/guitar.js';
 import { renderPages, showPages } from './js/originals.js';
-import { $, api, esc, topbar, renderNow, renderChordList, originalSources, tabStyleControl, instrumentControl, errorHTML, loginUrl, tuneRoute, isMuted, licenseBadge, checkLicense, showLicenseDialog } from './js/ui.js';
+import { $, api, esc, topbar, renderNow, renderChordList, originalSources, tabStyleControl, instrumentControl, chordInstrumentControl, errorHTML, loginUrl, tuneRoute, isMuted, licenseBadge, checkLicense, showLicenseDialog } from './js/ui.js';
 
 $('#top').insertAdjacentHTML('afterbegin', topbar());
 const params = new URLSearchParams(location.search);
@@ -153,7 +154,7 @@ try {
 
   displayAbc = tune.displayAbc || buildDisplayAbc(tune.abc, tune.settings || {}).abc;
   view.render(displayAbc);
-  renderChordList($('#chords'), t.chordsUsed || []);
+  drawChords();
   tabStyleControl($('#style'), () => view.render(displayAbc));
   $('#pdf').addEventListener('click', async () => {
     const btn = $('#pdf');
@@ -164,7 +165,7 @@ try {
       const { downloadPdf } = await import('./js/pdf.js');
       await downloadPdf({
         displayAbc, title: tune.title, composer: tune.composer, key: t.key, meter: t.meter,
-        chords: t.chordsUsed || [], filename: `${tune.id}-whistle-tab.pdf`,
+        chords: t.chordsUsed || [], chordInstrument: getChordInstrument(), filename: `${tune.id}-whistle-tab.pdf`,
       });
     } catch (e) {
       alert('Could not make the PDF: ' + e.message);
@@ -179,10 +180,10 @@ try {
     btn.disabled = true;
     btn.textContent = 'Making MP3…';
     try {
-      const bpm = Number($('#tempo').value), chords = $('#guitar').checked, inst = $('#instrument').value;
+      const bpm = Number($('#tempo').value), chords = $('#guitar').checked, inst = $('#instrument').value, chordInst = getChordInstrument();
       const { downloadMp3 } = await import('./js/mp3.js');
       const sound = inst === 'pennywhistle' ? '' : `-${inst.replace(/_/g, '-')}`;
-      await downloadMp3(view, bpm, { chords, filename: `${tune.id}-${bpm}bpm${sound}${chords ? '-guitar' : ''}.mp3` });
+      await downloadMp3(view, bpm, { chords, filename: `${tune.id}-${bpm}bpm${sound}${chords ? `-${chordInst.replace(/_/g, '-')}` : ''}.mp3` });
     } catch (e) {
       alert('Could not make the MP3: ' + e.message);
     } finally {
@@ -214,6 +215,12 @@ $('#play').addEventListener('click', () => (player.playing ? player.stop() : sta
 document.addEventListener('pw-mute', () => { if (player.playing) startPlay(); }); // carry on from the current note
 $('#guitar').addEventListener('change', () => { if (player.playing) startPlay(); });
 instrumentControl($('#instrument'), () => { if (player.playing) startPlay(); });
+/** The chords used, drawn for the chosen chord instrument. */
+function drawChords() {
+  $('#chords-head').textContent = `${CHORD_INSTRUMENTS[getChordInstrument()].label} chords in this tune`;
+  if (tune) renderChordList($('#chords'), tune.tab?.chordsUsed || []);
+}
+chordInstrumentControl($('#guitar'), $('#chord-instrument'), () => { drawChords(); if (player.playing) startPlay(); });
 $('#print').addEventListener('click', () => window.print());
 $('#delete').addEventListener('click', async () => {
   if (!confirm(`Delete “${tune.title}” and its original files from the library?`)) return;

@@ -1,7 +1,7 @@
 // Renders the engraved score with a penny-whistle tab row under every line,
 // links notes <-> fingerings for click highlighting, and plays the tune.
 import { analyzeTune, fingerNumbers, markFor } from './core.js';
-import { chordFrets } from './guitar.js';
+import { chordFrets, CHORD_INSTRUMENTS, getChordInstrument } from './guitar.js';
 
 // vertical room reserved under each system for the tab row
 const tabHeight = () => (getTabStyle() === 'holes' ? 103 : 45) + (getShowNoteNames() ? 15 : 0);
@@ -128,7 +128,7 @@ export class TabView {
     this.cells = [];
     this.lineBoxes = [];
     let chord = null;
-    const chordAt = []; // active guitar chord for every item
+    const chordAt = []; // active chord for every item
     refs.forEach((r) => {
       const m = data.measures[r.measureIndex];
       const ch = m.chords.filter((x) => x.at <= r.itemIndex).pop();
@@ -617,58 +617,132 @@ function synthTone(a, midi, t0, end, dur, level) {
   for (const node of [osc, vib, breath, chiff]) { node.start(t0); node.stop(end + 0.05); }
 }
 
-// ---- guitar: chords strummed under the tune, from plucked-string (Karplus-Strong) samples
-const OPEN_STRINGS = [40, 45, 50, 55, 59, 64]; // E2 A2 D3 G3 B3 E4
-const plucks = new Map(); // `${sampleRate}:${midi}` -> AudioBuffer (usable by any context at that rate)
-function pluck(a, midi) {
-  const key = `${a.sampleRate}:${midi}`;
-  let buf = plucks.get(key);
-  if (buf) return buf;
-  const sr = a.sampleRate, len = Math.floor(sr * 3);
-  buf = a.createBuffer(1, len, sr);
-  const d = buf.getChannelData(0);
+// ---- chords played under the tune (guitar, mandolin, banjo, …), from plucked-string (Karplus-Strong) samples.
+// Each chord's whole pattern (strum, roll…) is mixed into one buffer and played as one
+// source: one node per pick would be thousands for a tune, more than live audio can keep up with.
+const plucks = new Map(); // `${sampleRate}:${midi}:${decay}:${tone}` -> Float32Array, 3 s of the string ringing
+/** decay: how long the string rings (lower is shorter); tone: pick brightness, 0 (soft) to 1 (bright). */
+function pluck(sr, midi, decay = 0.996, tone = 0.5) {
+  const key = `${sr}:${midi}:${decay}:${tone}`;
+  let d = plucks.get(key);
+  if (d) return d;
+  const len = Math.floor(sr * 3);
+  d = new Float32Array(len);
   const n = Math.max(2, Math.round(sr / (440 * 2 ** ((midi - 69) / 12)) - 0.5)); // the averaging adds half a sample
+  const soft = 0.15 + 0.85 * tone;
   let lp = 0, peak = 0;
-  for (let i = 0; i < n; i++) { lp += 0.5 * ((Math.random() * 2 - 1) - lp); d[i] = lp; } // soft pick: darkened noise
-  for (let i = n; i < len; i++) d[i] = 0.996 * 0.5 * (d[i - n] + d[i - n - 1 < 0 ? 0 : i - n - 1]);
+  for (let i = 0; i < n; i++) { lp += soft * ((Math.random() * 2 - 1) - lp); d[i] = lp; } // the pick: noise, darkened for a soft one
+  for (let i = n; i < len; i++) d[i] = decay * 0.5 * (d[i - n] + d[i - n - 1 < 0 ? 0 : i - n - 1]);
   for (let i = 0; i < len; i++) peak = Math.max(peak, Math.abs(d[i]));
   if (peak) for (let i = 0; i < len; i++) d[i] /= peak;
-  plucks.set(key, buf);
+  plucks.set(key, d);
+  return d;
+}
+
+/** Times (from 0, before `span`), directions and loudness of each stroke in an instrument's pattern; beat in seconds. */
+function strokes(pattern, span, beat) {
+  const every = Math.max(0.11, { strum: Infinity, beat, downup: beat / 2, roll: beat / 2 }[pattern] ?? Infinity); // seconds: no faster than hands can go, e.g. in 6/8
+  const out = [];
+  for (let t = 0, k = 0; t < span - 0.02 && (k === 0 || every !== Infinity); t += every, k++) {
+    const up = pattern !== 'beat' && k % 2 === 1;
+    out.push({ t, k, up, level: up ? 0.55 : 1 });
+  }
+  return out;
+}
+const ROLL = [2, 3, 4, 0, 2, 3, 4, 0]; // 5-string banjo forward roll, by string as drawn (0 is the drone)
+const DAMP = 0.08; // seconds to damp the strings at a chord change
+
+/** Every pick of a chord played for `span` seconds: { s (string), midi, t, vol }. */
+function picks(inst, frets, span, beat) {
+  const strings = frets.map((f, s) => (f === 'x' ? null : { s, midi: inst.tuning[s] + Number(f) })).filter(Boolean);
+  const out = [];
+  for (const st of strokes(inst.pattern, span, beat)) {
+    if (inst.pattern === 'roll') { // one string at a time; a muted string's turn goes to the lowest string played
+      const x = strings.find((y) => y.s === ROLL[st.k % ROLL.length]) || strings[strings.length > 1 ? 1 : 0];
+      out.push({ ...x, t: st.t, vol: st.k % 4 === 0 ? 0.9 : 0.65 });
+      continue;
+    }
+    const order = st.up ? strings.slice().reverse() : strings;
+    const spread = st.up ? 0.008 : 0.014;
+    order.forEach((x, k) => out.push({ ...x, t: st.t + k * spread, vol: st.level }));
+  }
+  return out;
+}
+
+const chordMixes = new Map(); // `${sampleRate}:${instrument}:${chord}:${span}:${beat}` -> AudioBuffer
+/** The chord played for `span` seconds in the instrument's style, mixed into one buffer (then damped). */
+function chordMix(a, instrument, name, span, beat) {
+  const key = `${a.sampleRate}:${instrument}:${name}:${span.toFixed(3)}:${beat.toFixed(4)}`;
+  if (chordMixes.has(key)) return chordMixes.get(key);
+  const frets = chordFrets(name, instrument);
+  if (!frets) return null;
+  const inst = CHORD_INSTRUMENTS[instrument] || CHORD_INSTRUMENTS.guitar;
+  const sr = a.sampleRate, len = Math.ceil((span + DAMP) * sr), fade = Math.round(0.005 * sr);
+  const mix = new Float32Array(len);
+  const all = picks(inst, frets, span, beat);
+  // a course's second string, a few cents sharp (an octave up for a bouzouki's low two)
+  const voices = inst.courses ? [[0, 1, 0], [12, 1.0025, 0.006]] : [[0, 1, 0]];
+  for (const [octave, rate, delay] of voices) {
+    all.forEach((p, i) => {
+      const next = all.find((q, j) => j > i && q.s === p.s); // picking the string again stops this note
+      const src = pluck(sr, p.midi + (octave && inst.octave && p.s < 2 ? 12 : 0), inst.decay, inst.tone);
+      const from = Math.round((p.t + delay) * sr);
+      const to = Math.min(len, next ? Math.round((next.t + delay) * sr) : len, from + Math.floor((src.length - 1) / rate));
+      for (let i2 = from; i2 < to; i2++) {
+        const x = (i2 - from) * rate, k = x | 0;
+        let v = src[k] + (src[k + 1] - src[k]) * (x - k);
+        const left = to - i2;
+        if (left < fade) v *= left / fade; // no click where the note is cut off
+        if (i2 >= len - DAMP * sr) v *= (len - i2) / (DAMP * sr); // damped at the chord change
+        mix[i2] += v * p.vol;
+      }
+    });
+  }
+  const buf = a.createBuffer(1, len, sr);
+  buf.copyToChannel(mix, 0);
+  if (chordMixes.size > 64) chordMixes.clear();
+  chordMixes.set(key, buf);
   return buf;
 }
 
-/** Strum a chord (low string to high) at t0, damped at `end`. False when the chord has no known shape. */
-function strum(a, name, t0, end, level = 0.055) {
-  const shape = chordFrets(name);
-  if (!shape) return false;
-  const frets = shape.includes(',') ? shape.split(',') : shape.split('');
+/**
+ * Play a chord from t0 until `end` in the instrument's style (a strum, strums on the beat, down-up
+ * strumming, a banjo roll); beat is a beat's length in seconds. False when the chord has no known shape.
+ */
+function strum(a, name, t0, end, beat, instrument = getChordInstrument(), level = 0.055) {
+  const buf = chordMix(a, instrument, name, end - t0, beat);
+  if (!buf) return false;
+  const inst = CHORD_INSTRUMENTS[instrument] || CHORD_INSTRUMENTS.guitar;
   const out = a.createGain();
-  out.gain.setValueAtTime(level, t0);
-  out.gain.setValueAtTime(level, end);
-  out.gain.linearRampToValueAtTime(0, end + 0.08);
-  out.connect(master(a));
-  let k = 0;
-  frets.forEach((f, s) => {
-    if (f === 'x') return;
-    const src = a.createBufferSource();
-    src.buffer = pluck(a, OPEN_STRINGS[s] + Number(f));
-    src.connect(out);
-    src.start(t0 + k++ * 0.014);
-    src.stop(end + 0.1);
-  });
+  out.gain.value = level * Math.sqrt(6 / inst.tuning.length) * (inst.courses ? 0.75 : 1); // fewer strings, each a little louder
+  let into = out;
+  for (const [type, freq, gain] of inst.body || []) { // the instrument's body
+    const f = a.createBiquadFilter();
+    f.type = type;
+    f.frequency.value = freq;
+    if (gain) f.gain.value = gain;
+    into.connect(f);
+    into = f;
+  }
+  into.connect(master(a));
+  const src = a.createBufferSource();
+  src.buffer = buf;
+  src.connect(out);
+  src.start(t0);
   return true;
 }
 
 /**
  * Schedule the tune's notes, in play order, on audio context `a` from time `t`; returns the
- * end time. sound: false only times the items. chords: strum the guitar chords too, on each
- * chord change and at the start of each bar. onItem(idx, t) is called for every item.
+ * end time. sound: false only times the items. chords: strum the chords too (on chordInstrument), on
+ * each chord change and at the start of each bar. onItem(idx, t) is called for every item.
  */
-function schedule(a, v, bpm, order, t, { sound = true, chords = false, instrument = getInstrument(), onItem } = {}) {
+function schedule(a, v, bpm, order, t, { sound = true, chords = false, instrument = getInstrument(), chordInstrument = getChordInstrument(), onItem } = {}) {
   const beatLen = (v.visual.getBeatLength && v.visual.getBeatLength()) || 0.25;
   const wholeSec = (60 / bpm) / beatLen;
   const den = v.data.meter.den;
   const strums = []; // { t, chord }; chord null where the chords stop
+  const beat = wholeSec / den;
   order.forEach((idx, k) => {
     const it = v.items[idx];
     const dur = (it.beats / den) * wholeSec;
@@ -696,13 +770,13 @@ function schedule(a, v, bpm, order, t, { sound = true, chords = false, instrumen
     if (onItem) onItem(idx, t);
     t += dur;
   });
-  strums.forEach((st, i) => { if (st.chord) strum(a, st.chord, st.t, strums[i + 1]?.t ?? t); });
+  strums.forEach((st, i) => { if (st.chord) strum(a, st.chord, st.t, strums[i + 1]?.t ?? t, beat, chordInstrument); });
   return t;
 }
 
-/** The whole tune as Play sounds it at this tempo (with or without the guitar), rendered
+/** The whole tune as Play sounds it at this tempo (with or without the chords), rendered
  *  offline into a stereo AudioBuffer. */
-export async function renderTune(view, bpm, { chords = false, instrument = getInstrument() } = {}) {
+export async function renderTune(view, bpm, { chords = false, instrument = getInstrument(), chordInstrument = getChordInstrument() } = {}) {
   if (!view.items.length) throw new Error('There are no notes to play.');
   await Promise.all([loadSamples(), loadInstrument(noteMidis(view), instrument)]);
   const order = view.playOrder();
@@ -710,7 +784,7 @@ export async function renderTune(view, bpm, { chords = false, instrument = getIn
   const len = schedule(null, view, bpm, order, 0, { sound: false }) + lead + tail;
   const rate = 44100;
   const a = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(2, Math.ceil(len * rate), rate);
-  schedule(a, view, bpm, order, lead, { chords, instrument });
+  schedule(a, view, bpm, order, lead, { chords, instrument, chordInstrument });
   return a.startRendering();
 }
 
@@ -725,7 +799,7 @@ export class Player {
   }
 
   /** bpm counts the tune's beat unit (from Q: or the meter). Muted: no sound, the notes still highlight and scroll in time.
-   *  chords: strum the guitar chords too, on each chord change and at the start of each bar. */
+   *  chords: strum the chords too (on the chosen chord instrument), on each chord change and at the start of each bar. */
   play(bpm, fromItem = -1, { muted = false, chords = false } = {}) {
     this.stop();
     const v = this.view;

@@ -1,7 +1,7 @@
 import { analyzeTune, buildDisplayAbc, bestTranspose, whistleStats, cleanAbc, tabDocument, transposedKeyName } from './core.js';
 import { TabView, Player, tone, defaultBpm } from './render.js';
 import { renderPages, pagesToImages, showPages, ACCEPTED } from './originals.js';
-import { $, api, apiUrl, apiError, errorHTML, esc, topbar, renderNow, originalSources, tabStyleControl, instrumentControl, isMuted } from './ui.js';
+import { $, api, apiUrl, apiError, errorHTML, esc, topbar, renderNow, originalSources, tabStyleControl, instrumentControl, chordInstrumentControl, isMuted } from './ui.js';
 
 $('#top').insertAdjacentHTML('afterbegin', topbar());
 
@@ -197,6 +197,7 @@ $('#play').addEventListener('click', () => (player.playing ? player.stop() : sta
 document.addEventListener('pw-mute', () => { if (player.playing) startPlay(); }); // carry on from the current note
 $('#guitar').addEventListener('change', () => { if (player.playing) startPlay(); });
 instrumentControl($('#instrument'), () => { if (player.playing) startPlay(); });
+chordInstrumentControl($('#guitar'), $('#chord-instrument'), () => { if (player.playing) startPlay(); });
 document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, textarea, select')) return;
   if (e.key === 'ArrowRight') { view.step(1); e.preventDefault(); }

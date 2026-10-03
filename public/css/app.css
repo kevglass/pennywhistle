@@ -189,6 +189,7 @@ body:not(.has-player) .player, body:not(.has-player) .player-toggle, .player.col
   .player .settings { flex: 1 1 auto; min-width: 0; flex-wrap: wrap; row-gap: 6px; }
   .player .settings::before { content: ''; flex-basis: 100%; order: 1; } /* the line break */
   .player .settings .check, .player .settings .btn { order: 2; }
+  .player .settings .check .check { order: 0; } /* Chords box, then its instrument */
 }
 
 /* narrower screens: tempo / tab / sound move into a drop-down under the bar */
