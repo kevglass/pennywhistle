@@ -29,9 +29,20 @@
   </div>
 </main>
 <script type="module">
-import { $, api, esc, errorHTML, topbar, tuneHref } from './js/ui.js';
+import { $, api, esc, errorHTML, loginUrl, topbar, tuneHref, licenseBadge, checkLicense, showLicenseDialog, LICENSE_STATUS } from './js/ui.js';
 $('#top').innerHTML = topbar('library');
 let lib = { mine: [], friends: [] };
+let loaded = false;
+let canCheck = false; // the server has a Claude API key
+const checking = new Set(); // ids of tunes whose license is being checked
+
+// The license status; your own unchecked tunes get a button to check it.
+const licenseCell = (t, owner) => {
+  if (t.license) return licenseBadge(t.license, { button: true });
+  if (checking.has(t.id)) return '<span class="lic-checking muted small"><span class="spinner" aria-hidden="true"></span>Checking…</span>';
+  if (owner || !canCheck) return '<span class="muted small">Not checked</span>';
+  return `<button class="btn compact check-license" type="button" data-id="${esc(t.id)}" title="Look up who owns the rights to this tune and whether it can be used for free in a game or video">Check</button>`;
+};
 
 const row = (t, owner) => {
   const href = esc(tuneHref(t.id, owner));
@@ -41,6 +52,7 @@ const row = (t, owner) => {
         <td>${t.key ? esc(t.key) : ''}</td>
         <td class="wide-only">${t.meter ? esc(t.meter) : ''}</td>
         <td class="num">${t.measures}</td>
+        <td data-id="${esc(t.id)}" data-owner="${esc(owner || '')}">${licenseCell(t, owner)}</td>
         <td class="wide-only muted small">${(t.chords || []).map(esc).join(' · ')}</td>
         <td class="wide-only muted small">${new Date(t.updatedAt).toLocaleDateString()}</td>
       </tr>`;
@@ -51,14 +63,15 @@ const byTitle = (a, b) => (a.title || '').localeCompare(b.title || '', undefined
 const friendName = (f) => f.name || f.email || '';
 
 // Searching covers every tune you can see; a friend's name or email finds all their tunes.
-const matches = (q, t, owner = {}) => !q || [t.title, t.composer, t.key, t.meter, ...(t.chords || []), owner.name, owner.email]
+const matches = (q, t, owner = {}) => !q || [t.title, t.composer, t.key, t.meter, ...(t.chords || []), owner.name, owner.email,
+  t.license && LICENSE_STATUS[t.license.status]?.label, t.license?.license]
   .join(' ').toLowerCase().includes(q);
 
 function section(heading, tunes, emptyText, q) {
   if (q && !tunes.length) return '';
   return `<section class="lib-section"><h2>${heading}</h2>
     ${tunes.length ? `<div class="tune-table-wrap"><table class="tune-table">
-      <thead><tr><th>Title</th><th>Key</th><th class="wide-only">Meter</th><th class="num">Bars</th><th class="wide-only">Chords</th><th class="wide-only">Updated</th></tr></thead>
+      <thead><tr><th>Title</th><th>Key</th><th class="wide-only">Meter</th><th class="num">Bars</th><th>License</th><th class="wide-only">Chords</th><th class="wide-only">Updated</th></tr></thead>
       <tbody>${tunes.join('')}</tbody></table></div>` : `<p class="muted">${emptyText}</p>`}</section>`;
 }
 
@@ -80,11 +93,42 @@ function draw() {
 }
 $('#q').addEventListener('input', draw);
 // The whole row opens the tune; the title link keeps it keyboard- and middle-click-friendly.
-$('#list').addEventListener('click', (e) => {
+// A tune in the library by id (and owner, for a friend's tune).
+const findTune = (id, owner) => (owner ? lib.friends.find((f) => f.sub === owner)?.tunes : lib.mine)?.find((x) => x.id === id);
+
+$('#list').addEventListener('click', async (e) => {
+  const badge = e.target.closest('.show-license');
+  if (badge) {
+    const { id, owner } = badge.closest('td').dataset;
+    const t = findTune(id, owner);
+    if (!t) return;
+    // Your own tunes can be checked again from the pop-up.
+    const onCheck = !owner && canCheck ? async () => { t.license = await checkLicense(t.id); draw(); return t.license; } : undefined;
+    showLicenseDialog(t.title, t.license, { onCheck });
+    return;
+  }
+  const btn = e.target.closest('.check-license');
+  if (btn) {
+    const t = lib.mine.find((x) => x.id === btn.dataset.id);
+    if (!t) return;
+    checking.add(t.id);
+    draw();
+    try {
+      t.license = await checkLicense(t.id);
+    } catch (err) {
+      if (err.signIn) location.href = loginUrl();
+      else alert(`Could not check the license of “${t.title}”: ${err.message}`);
+    } finally {
+      checking.delete(t.id);
+      draw();
+    }
+    return;
+  }
   const tr = e.target.closest('tr[data-href]');
   if (tr && !e.target.closest('a') && !getSelection().toString()) location.href = tr.dataset.href;
 });
-try { lib = await api('library'); draw(); }
+api('config').then((c) => { canCheck = !!c.licenseCheck; if (loaded) draw(); }).catch(() => {});
+try { lib = await api('library'); loaded = true; draw(); }
 catch (e) { $('#list').innerHTML = `<p>${errorHTML(e, 'Could not load the library')}</p>`; }
 </script>
 </body>

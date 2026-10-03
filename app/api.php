@@ -15,6 +15,7 @@ const PROJECT_ROOT = __DIR__ . '/..';
 
 require PROJECT_ROOT . '/vendor/autoload.php';
 require __DIR__ . '/claude.php';
+require __DIR__ . '/license.php';
 require __DIR__ . '/omr/musescore.php';
 require __DIR__ . '/friends.php';
 
@@ -41,6 +42,9 @@ function env(string $key, string $default = ''): string
 define('DATA_ROOT', rtrim(env('DATA_DIR', PROJECT_ROOT . '/data'), '/'));
 // TUNES_DIR (the signed-in user's library) is defined in handle() once the user is known.
 define('MODEL', env('CLAUDE_MODEL', 'claude-opus-5-5'));
+// License checks: Sonnet 5.5 at low effort was as accurate as Opus here for less (see app/license.php).
+define('LICENSE_MODEL', env('LICENSE_MODEL', 'claude-sonnet-5-5'));
+define('LICENSE_EFFORT', env('LICENSE_EFFORT', 'low'));
 const UPLOAD_TYPES = ['application/pdf' => '.pdf', 'image/png' => '.png', 'image/jpeg' => '.jpg', 'image/gif' => '.gif', 'image/webp' => '.webp'];
 
 function has_key(): bool
@@ -114,6 +118,7 @@ function summary(array $t): array
         'key' => $t['tab']['key'] ?? null, 'meter' => $t['tab']['meter'] ?? null,
         'measures' => count($t['tab']['measures'] ?? []), 'chords' => $t['tab']['chordsUsed'] ?? [],
         'transpose' => $t['settings']['transpose'] ?? 0, 'hasOriginal' => !empty($t['originals']),
+        'license' => $t['license'] ?? null, // in full: the library shows the details on click
         'createdAt' => $t['createdAt'], 'updatedAt' => $t['updatedAt'],
     ];
 }
@@ -188,6 +193,7 @@ function tune_record(array $body, ?array $existing): array
         'tab' => is_array($body['tab'] ?? null) ? $body['tab'] : null,
         'originals' => $existing['originals'] ?? [],
         'transcription' => $body['transcription'] ?? ($existing['transcription'] ?? null),
+        'license' => $existing['license'] ?? null, // set only by the license check
     ], fn ($v) => $v !== null);
 }
 
@@ -307,6 +313,35 @@ function transcribe(): never
         $write(['type' => 'error', 'message' => 'Transcription failed: ' . $e->getMessage()]);
     }
     exit;
+}
+
+// ------------------------------------------------------------------ license check
+
+/** Research the tune's license with Claude and web search, and save it in tune.json. */
+function license_check(string $dir, array $tune): never
+{
+    if (!has_key()) send_json(503, ['error' => 'License checks need Claude: set ANTHROPIC_API_KEY in the server .env file.']);
+    set_time_limit(300);
+    ignore_user_abort(true); // keep the result even if the page is closed while Claude searches
+    try {
+        $client = new Client(apiKey: env('ANTHROPIC_API_KEY') ?: null);
+        $license = check_license($client, LICENSE_MODEL, LICENSE_EFFORT, $tune, env('ANTHROPIC_WORKSPACE_ID'));
+    } catch (AuthenticationException) {
+        send_json(502, ['error' => "The server's Anthropic API key was rejected."]);
+    } catch (RateLimitException) {
+        send_json(429, ['error' => 'Rate limited by the Claude API, please try again in a minute.']);
+    } catch (APIConnectionException) {
+        send_json(502, ['error' => 'Could not reach the Claude API.']);
+    } catch (Throwable $e) {
+        error_log('license check error: ' . $e->getMessage());
+        send_json(502, ['error' => 'License check failed: ' . $e->getMessage()]);
+    }
+    // Re-read the tune: it may have been edited while Claude was searching.
+    $current = load_tune(dirname($dir), $tune['id']);
+    if (!$current) send_json(404, ['error' => 'Tune not found']);
+    $current['license'] = $license;
+    write_json_atomic("$dir/tune.json", $current);
+    send_json(200, $license);
 }
 
 // ------------------------------------------------------------------ auth (Google sign-in)
@@ -451,7 +486,7 @@ function handle(): never
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
     // Public routes: everything else needs a signed-in Google user.
-    if ($route === 'config' && $method === 'GET') send_json(200, ['transcribe' => has_key(), 'model' => MODEL, 'googleClientId' => env('GOOGLE_CLIENT_ID')]);
+    if ($route === 'config' && $method === 'GET') send_json(200, ['transcribe' => has_key(), 'licenseCheck' => has_key(), 'model' => MODEL, 'googleClientId' => env('GOOGLE_CLIENT_ID')]);
     if ($route === 'auth/google' && $method === 'POST') login();
     if ($route === 'auth/logout' && $method === 'POST') logout();
 
@@ -486,6 +521,7 @@ function handle(): never
 
     if ($action === 'files' && isset($parts[3]) && $method === 'GET') serve_original($dir, $existing, $parts[3]);
     if ($action === '' && $method === 'GET') send_json(200, $existing);
+    if ($action === 'license' && $method === 'POST') license_check($dir, $existing);
     if ($action === '' && $method === 'POST') { // update (POST for compatibility with simple hosts)
         $meta = meta_from_request();
         $rec = tune_record($meta, $existing);

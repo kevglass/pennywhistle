@@ -3,23 +3,11 @@
 import { TabView, getTabStyle, getShowNoteNames } from './render.js';
 import { fingerNumbers, markFor } from './core.js';
 import { chordDiagramSVG } from './guitar.js';
+import { loadScript } from './ui.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const LAYOUT_WIDTH = 900; // px; scaled to the A4 text width
 const C = { ink: '#000000', muted: '#555555', faint: '#bbbbbb', upper: '#6741d9', warn: '#b35c00', accent: '#1f6f5c' };
-
-const loaded = {};
-function loadScript(rel) {
-  const url = new URL(rel, import.meta.url).href;
-  loaded[url] ??= new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = url;
-    s.onload = resolve;
-    s.onerror = () => reject(new Error(`Could not load ${rel}`));
-    document.head.appendChild(s);
-  });
-  return loaded[url];
-}
 
 function el(name, attrs = {}, text) {
   const e = document.createElementNS(SVGNS, name);

@@ -10,7 +10,24 @@
 <script src="vendor/abcjs-basic-min.js"></script>
 </head>
 <body class="has-player">
-<div id="top"></div>
+<div id="top">
+  <div class="player" role="region" aria-label="Player">
+    <div class="controls">
+      <button class="btn" id="play" type="button">▶ Play</button>
+      <button class="btn mute-toggle" type="button" aria-pressed="false" aria-label="Mute"></button>
+      <button class="btn settings-toggle" type="button" aria-expanded="false" aria-label="Player settings">⚙</button>
+      <div class="settings">
+        <label for="tempo">Tempo</label><input type="range" id="tempo" min="30" max="220" value="90"><span id="tempo-v" class="small">90</span>
+        <label for="instrument">Instrument</label><select id="instrument"></select>
+        <span id="style" class="small"></span>
+        <label class="small check"><input type="checkbox" id="guitar"> Guitar chords</label>
+        <label class="small check"><input type="checkbox" id="sound" checked> Sound on click</label>
+        <button class="btn mp3" type="button" title="The tune as Play sounds it: this tempo and instrument, with guitar chords if they are on">⬇ MP3</button>
+      </div>
+    </div>
+    <div class="now" id="now"></div>
+  </div>
+</div>
 <main>
   <div class="tune-head">
     <div>
@@ -19,11 +36,12 @@
     </div>
     <div class="actions">
       <button class="btn" id="toggle-original" aria-pressed="false" hidden>Show original</button>
-      <button class="btn primary" id="pdf" type="button"><span class="wide-only">Download</span> PDF</button>
+      <button class="btn primary" id="pdf" type="button"><svg class="icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span><span class="wide-only">Download </span>PDF</span></button>
       <a class="btn" id="edit" href="#">Edit</a>
       <details class="more">
         <summary class="btn" aria-label="More actions">⋯ More</summary>
         <div class="menu">
+          <button class="btn mp3" type="button" title="The tune as Play sounds it: the current tempo and instrument, with guitar chords if they are on">Download MP3</button>
           <a class="btn" id="json" href="#" download>Download JSON</a>
           <button class="btn" id="print" type="button">Print</button>
           <button class="btn danger" id="delete" type="button">Delete</button>
@@ -35,20 +53,6 @@
   <div class="split" id="split">
     <aside class="original-pane" id="original" hidden aria-label="Original music"></aside>
     <div class="tab-pane">
-      <div class="player" role="region" aria-label="Player">
-        <div class="controls">
-          <button class="player-toggle" type="button" aria-expanded="true" aria-label="Hide player" title="Hide player"><span class="when-open" aria-hidden="true">‹</span><span class="when-closed" aria-hidden="true">♪</span></button>
-          <button class="btn" id="play" type="button">▶ Play</button>
-          <button class="btn mute-toggle" type="button" aria-pressed="false" aria-label="Mute"></button>
-          <button class="btn settings-toggle" type="button" aria-expanded="false" aria-label="Player settings">⚙</button>
-          <div class="settings">
-            <label for="tempo">Tempo</label><input type="range" id="tempo" min="30" max="220" value="90"><span id="tempo-v" class="small">90</span>
-            <span id="style" class="small"></span>
-            <label class="small check"><input type="checkbox" id="sound" checked> Sound on click</label>
-          </div>
-        </div>
-        <div class="now" id="now"></div>
-      </div>
       <div id="tab"></div>
       <p class="muted small no-print">Tip: tap any note in the music or the tab to see its fingering.<span class="kbd-tip"> Use ← → to step through the notes.</span></p>
     </div>
@@ -64,9 +68,9 @@
 import { buildDisplayAbc } from './js/core.js';
 import { TabView, Player, tone, defaultBpm } from './js/render.js';
 import { renderPages, showPages } from './js/originals.js';
-import { $, api, esc, topbar, renderNow, renderChordList, originalSources, tabStyleControl, errorHTML, loginUrl, tuneRoute, isMuted } from './js/ui.js';
+import { $, api, esc, topbar, renderNow, renderChordList, originalSources, tabStyleControl, instrumentControl, errorHTML, loginUrl, tuneRoute, isMuted, licenseBadge, checkLicense, showLicenseDialog } from './js/ui.js';
 
-$('#top').innerHTML = topbar();
+$('#top').insertAdjacentHTML('afterbegin', topbar());
 const params = new URLSearchParams(location.search);
 const id = params.get('id');
 const owner = params.get('owner'); // set for a friend's tune, which is read-only
@@ -80,7 +84,37 @@ const view = new TabView($('#tab'), {
 const player = new Player(view, { onStop: () => { $('#play').textContent = '▶ Play'; } });
 renderNow($('#now'), null);
 
-let tune, displayAbc, pagesLoaded = false;
+let tune, displayAbc, pagesLoaded = false, canCheck = false;
+
+// The license status under the title: click it for the details in a pop-up. Your own unchecked tunes get a Check button.
+function renderLicense({ checking = false } = {}) {
+  const el = $('#license-slot');
+  if (!el) return;
+  if (checking) el.innerHTML = '<span class="lic-checking muted small"><span class="spinner" aria-hidden="true"></span>Checking license…</span>';
+  else if (tune.license) el.innerHTML = licenseBadge(tune.license, { button: true });
+  else if (!tune.owner && canCheck) el.innerHTML = '<button class="btn compact" id="check-license" type="button" title="Look up who owns the rights to this tune and whether it can be used for free in a game or video">Check license</button>';
+  else el.innerHTML = '';
+}
+
+async function runLicenseCheck() {
+  renderLicense({ checking: true });
+  try {
+    tune.license = await checkLicense(tune.id);
+  } catch (e) {
+    if (e.signIn) location.href = loginUrl();
+    else alert('Could not check the license: ' + e.message);
+  } finally {
+    renderLicense();
+  }
+}
+$('#meta').addEventListener('click', (e) => {
+  if (e.target.closest('#check-license')) runLicenseCheck();
+  if (e.target.closest('.show-license')) {
+    const onCheck = !tune.owner && canCheck ? async () => { tune.license = await checkLicense(tune.id); renderLicense(); return tune.license; } : undefined;
+    showLicenseDialog(tune.title, tune.license, { onCheck });
+  }
+});
+
 async function setOriginal(show) {
   const btn = $('#toggle-original');
   btn.setAttribute('aria-pressed', String(show));
@@ -109,6 +143,15 @@ try {
     tune.settings?.transpose ? `<span class="badge">transposed ${tune.settings.transpose > 0 ? '+' : ''}${tune.settings.transpose} from the original</span>` : '',
     `<span class="badge">approved ${new Date(tune.updatedAt).toLocaleDateString()}</span>`,
   ].filter(Boolean).join('');
+  $('#meta').insertAdjacentHTML('beforeend', '<span id="license-slot" aria-live="polite"></span>');
+  canCheck = !!(await api('config').catch(() => ({}))).licenseCheck;
+  renderLicense();
+  // A newly saved tune is checked straight away.
+  if (params.get('check') === 'license') {
+    params.delete('check');
+    history.replaceState(null, '', `?${params}`);
+    if (!tune.license && !tune.owner && canCheck) runLicenseCheck();
+  }
   $('#edit').href = `editor.html?id=${encodeURIComponent(tune.id)}`;
   if (tune.owner) $('#edit').hidden = $('#delete').hidden = true;
   $('#json').href = URL.createObjectURL(new Blob([JSON.stringify(tune, null, 2)], { type: 'application/json' }));
@@ -136,6 +179,25 @@ try {
       btn.innerHTML = label;
     }
   });
+  // in the player settings and the More menu
+  document.querySelectorAll('.mp3').forEach((btn) => btn.addEventListener('click', async () => {
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Making MP3…';
+    try {
+      const bpm = Number($('#tempo').value), chords = $('#guitar').checked, inst = $('#instrument').value;
+      const { downloadMp3 } = await import('./js/mp3.js');
+      const sound = inst === 'pennywhistle' ? '' : `-${inst.replace(/_/g, '-')}`;
+      await downloadMp3(view, bpm, { chords, filename: `${tune.id}-${bpm}bpm${sound}${chords ? '-guitar' : ''}.mp3` });
+    } catch (e) {
+      alert('Could not make the MP3: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+      const more = btn.closest('details');
+      if (more) more.open = false;
+    }
+  }));
   $('#tempo').value = defaultBpm(view.visual);
   $('#tempo-v').textContent = $('#tempo').value;
 
@@ -151,11 +213,13 @@ try {
 
 $('#tempo').addEventListener('input', () => { $('#tempo-v').textContent = $('#tempo').value; });
 function startPlay() {
-  player.play(Number($('#tempo').value), view.selected, { muted: isMuted() });
+  player.play(Number($('#tempo').value), view.selected, { muted: isMuted(), chords: $('#guitar').checked });
   $('#play').textContent = '■ Stop';
 }
 $('#play').addEventListener('click', () => (player.playing ? player.stop() : startPlay()));
 document.addEventListener('pw-mute', () => { if (player.playing) startPlay(); }); // carry on from the current note
+$('#guitar').addEventListener('change', () => { if (player.playing) startPlay(); });
+instrumentControl($('#instrument'), () => { if (player.playing) startPlay(); });
 $('#print').addEventListener('click', () => window.print());
 $('#delete').addEventListener('click', async () => {
   if (!confirm(`Delete “${tune.title}” and its original files from the library?`)) return;

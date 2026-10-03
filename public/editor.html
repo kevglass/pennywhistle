@@ -10,7 +10,22 @@
 <script src="vendor/abcjs-basic-min.js"></script>
 </head>
 <body>
-<div id="top"></div>
+<div id="top">
+  <div class="player" role="region" aria-label="Player">
+    <div class="controls">
+      <button class="btn" id="play" type="button">▶ Play</button>
+      <button class="btn mute-toggle" type="button" aria-pressed="false" aria-label="Mute"></button>
+      <button class="btn settings-toggle" type="button" aria-expanded="false" aria-label="Player settings">⚙</button>
+      <div class="settings">
+        <label for="tempo">Tempo</label><input type="range" id="tempo" min="30" max="220" value="90"><span id="tempo-v" class="small">90</span>
+        <label for="instrument">Instrument</label><select id="instrument"></select>
+        <span id="style" class="small"></span>
+        <label class="small check"><input type="checkbox" id="guitar"> Guitar chords</label>
+      </div>
+    </div>
+    <div class="now" id="now"></div>
+  </div>
+</div>
 <main class="stack">
   <div>
     <h1 id="heading">New tab from sheet music</h1>
@@ -83,19 +98,6 @@
     <div class="split" id="split">
       <aside class="original-pane" id="original" hidden aria-label="Original music"></aside>
       <div class="tab-pane">
-        <div class="player" role="region" aria-label="Player">
-          <div class="controls">
-            <button class="player-toggle" type="button" aria-expanded="true" aria-label="Hide player" title="Hide player"><span class="when-open" aria-hidden="true">‹</span><span class="when-closed" aria-hidden="true">♪</span></button>
-            <button class="btn" id="play" type="button">▶ Play</button>
-            <button class="btn mute-toggle" type="button" aria-pressed="false" aria-label="Mute"></button>
-            <button class="btn settings-toggle" type="button" aria-expanded="false" aria-label="Player settings">⚙</button>
-            <div class="settings">
-              <label for="tempo">Tempo</label><input type="range" id="tempo" min="30" max="220" value="90"><span id="tempo-v" class="small">90</span>
-              <span id="style" class="small"></span>
-            </div>
-          </div>
-          <div class="now" id="now"></div>
-        </div>
         <div id="preview"></div>
       </div>
     </div>

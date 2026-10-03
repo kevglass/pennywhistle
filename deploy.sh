@@ -98,4 +98,19 @@ else
   echo "Warning: the API did not answer as expected. Check that the host runs PHP 8.1+. Response:"
   echo "$cfg" | head -c 600; echo
 fi
+# Pages and code must never be served from a stale browser cache (see public/.htaccess).
+stale=0
+for p in "" index.html tune.html editor.html js/ui.js css/app.css; do
+  h=$(curl -s -D - -o /dev/null "$SITE_URL/$p" | tr -d '\r' || true)
+  if ! grep -qi '^cache-control:.*no-cache' <<<"$h" || grep -qi '^cache-control:.*max-age=[1-9]' <<<"$h"; then
+    echo "Warning: /$p could be cached by browsers:"; grep -i -E '^(cache-control|expires):' <<<"$h" || echo "  (no Cache-Control header)"
+    stale=1
+  fi
+done
+h=$(curl -s -D - -o /dev/null "$SITE_URL/api/index.php?r=config" | tr -d '\r' || true)
+if grep -qi '^cache-control:.*max-age=[1-9]' <<<"$h" || grep -qi '^expires:' <<<"$h"; then
+  echo "Warning: the API is being given a cache lifetime by the host:"; grep -i -E '^(cache-control|expires):' <<<"$h"
+  stale=1
+fi
+[[ $stale -eq 0 ]] && echo "Pages, code and API are all served with no-cache"
 say "Deployed: $SITE_URL/"

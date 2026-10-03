@@ -40,11 +40,15 @@ h2 { font-size: 1.15rem; }
 [hidden] { display: none !important; }
 
 /* ---------- top bar */
-.topbar { display: flex; align-items: center; gap: 16px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--surface); position: sticky; top: 0; z-index: 20; }
+/* #top holds the top bar (and the player on tune pages) and stays fixed to the top of the screen.
+   The safe-area insets keep it clear of the status bar / notch when the site runs full screen from a phone's home screen. */
+:root { --safe-top: env(safe-area-inset-top, 0px); --safe-left: env(safe-area-inset-left, 0px); --safe-right: env(safe-area-inset-right, 0px); }
+html { scroll-padding-top: calc(var(--head-h, 64px) + 8px); }
+#top { position: sticky; top: 0; z-index: 50; padding-top: var(--safe-top); background: var(--surface); box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+.topbar { display: flex; align-items: center; gap: 16px; padding: 12px calc(20px + var(--safe-right)) 12px calc(20px + var(--safe-left)); border-bottom: 1px solid var(--line); background: var(--surface); }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--ink); text-decoration: none; }
 .brand svg { width: 26px; height: 26px; }
 .topbar nav { margin-left: auto; display: flex; gap: 8px; align-items: center; }
-.theme-toggle { width: 38px; justify-content: center; padding: 7px 0; font-size: 1rem; }
 
 main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 60px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
@@ -104,7 +108,7 @@ details > summary { cursor: pointer; font-weight: 600; }
 .split { display: grid; gap: 16px; grid-template-columns: 1fr; }
 .split.with-original { grid-template-columns: minmax(280px, 42%) 1fr; }
 @media (max-width: 960px) { .split.with-original { grid-template-columns: 1fr; } }
-.original-pane { position: sticky; top: 70px; max-height: calc(100vh - 86px); overflow: auto; padding: 10px; background: var(--surface-2); border-radius: var(--radius); border: 1px solid var(--line); }
+.original-pane { position: sticky; top: calc(var(--head-h, 64px) + 8px); max-height: calc(100vh - var(--head-h, 64px) - 16px); overflow: auto; padding: 10px; background: var(--surface-2); border-radius: var(--radius); border: 1px solid var(--line); }
 @media (max-width: 960px) { .original-pane { position: static; max-height: 70vh; } }
 .page { margin: 0 0 12px; }
 .page canvas, .page img { width: 100%; height: auto; display: block; background: #fff; border-radius: 4px; box-shadow: var(--shadow); }
@@ -134,6 +138,8 @@ details > summary { cursor: pointer; font-weight: 600; }
 .count .oct { color: var(--upper); font-weight: 900; }
 .count.open-top small { font-size: inherit; font-weight: inherit; color: var(--warn); }
 .cell.active .count { color: var(--hi); }
+.cell.tight .count.open-top { display: flex; flex-direction: column; align-items: center; padding-top: 0; line-height: 1; }
+.cell.tight .count.open-top small { font-size: 9px; line-height: 9px; }
 .cell.style-numbers .rest-mark, .cell.style-numbers .hold-mark { height: 26px; }
 .digits { display: flex; flex-direction: column; align-items: center; font-size: 11.5px; line-height: 10.6px; font-variant-numeric: tabular-nums; min-height: 69px; }
 .digits b { font-weight: 800; }
@@ -151,27 +157,17 @@ details > summary { cursor: pointer; font-weight: 600; }
 .cell.rest .rest-mark { border-left: 2px dotted var(--rest); padding-left: 2px; }
 
 
-/* ---------- player: thin bar fixed to the top, collapsible to an icon at the top left.
-   The safe-area insets keep it clear of the status bar / notch when the site runs full screen from a phone's home screen. */
-:root { --safe-top: env(safe-area-inset-top, 0px); --safe-left: env(safe-area-inset-left, 0px); --safe-right: env(safe-area-inset-right, 0px); }
-body.has-player { padding-top: calc(50px + var(--safe-top)); }
-body.has-player.player-collapsed { padding-top: 0; }
-body.has-player .topbar { position: static; padding-left: 60px; }
-.player { position: fixed; top: 0; left: 0; right: 0; z-index: 50; height: calc(50px + var(--safe-top)); display: flex; align-items: center; gap: 10px;
-  padding: var(--safe-top) calc(12px + var(--safe-right)) 0 calc(8px + var(--safe-left)); background: var(--surface); border-bottom: 1px solid var(--line); box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+/* ---------- player: thin bar under the top bar, hidden and shown with the ♪ button in the top bar */
+body:not(.has-player) .player, body:not(.has-player) .player-toggle, .player.collapsed { display: none !important; }
+.player { position: relative; height: 50px; display: flex; align-items: center; gap: 10px;
+  padding: 0 calc(12px + var(--safe-right)) 0 calc(12px + var(--safe-left)); background: var(--surface); border-bottom: 1px solid var(--line); }
 .player .controls { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 .player .btn { min-height: 34px; padding: 4px 12px; }
-.player-toggle { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface);
-  color: var(--ink); font-size: 18px; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-.player-toggle:hover { background: var(--surface-2); }
-.player .when-closed { display: none; }
-.player.collapsed { left: calc(10px + var(--safe-left)); top: calc(7px + var(--safe-top)); right: auto; height: auto; padding: 0; background: transparent; border: 0; box-shadow: none; }
-.player.collapsed .controls > :not(.player-toggle), .player.collapsed .now, .player.collapsed .settings { display: none !important; }
-.player.collapsed .player-toggle { width: 40px; height: 40px; background: var(--accent); border-color: var(--accent); color: var(--accent-ink); box-shadow: 0 2px 8px rgba(0,0,0,.2); }
-.player.collapsed .when-open { display: none; }
-.player.collapsed .when-closed { display: inline; }
 .player .settings { display: flex; align-items: center; gap: 8px; font-size: .88rem; color: var(--muted); }
 .player .settings select { min-height: 32px; padding: 3px 8px; }
+.player .settings #instrument { max-width: 11em; }
+.player .settings #style { display: contents; } /* its Tab picker and Note names box lay out with the rest */
+.player .settings .btn { white-space: nowrap; }
 .player input[type=range] { width: 100px; accent-color: var(--accent); }
 .player .settings-toggle { display: none; }
 .player .mute-toggle { padding: 4px 8px; }
@@ -186,13 +182,26 @@ body.has-player .topbar { position: static; padding-left: 60px; }
 .now .n-chord { font-size: .82rem; font-weight: 700; padding: 2px 9px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
 .empty-now { color: var(--muted); font-size: .85rem; overflow: hidden; text-overflow: ellipsis; }
 
+/* wide screens: the settings sit in two rows (tempo / instrument / tab, then the check boxes and download) so the bar never runs off the edge */
+@media (min-width: 1021px) {
+  .player { height: auto; min-height: 50px; padding-top: 6px; padding-bottom: 6px; }
+  .player .controls { flex: 1 1 auto; min-width: 0; }
+  .player .settings { flex: 1 1 auto; min-width: 0; flex-wrap: wrap; row-gap: 6px; }
+  .player .settings::before { content: ''; flex-basis: 100%; order: 1; } /* the line break */
+  .player .settings .check, .player .settings .btn { order: 2; }
+}
+
 /* narrower screens: tempo / tab / sound move into a drop-down under the bar */
-@media (max-width: 860px) {
+@media (max-width: 1020px) {
   .player .settings-toggle { display: inline-flex; justify-content: center; }
   .player .settings { display: none; }
-  .player.show-settings .settings { display: flex; flex-wrap: wrap; position: fixed; top: calc(50px + var(--safe-top)); left: 0; right: 0; padding: 10px calc(14px + var(--safe-right)) 10px calc(14px + var(--safe-left));
+  /* a grid: label | control | value, with the check boxes and the download in full rows, left-aligned */
+  .player.show-settings .settings { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px 12px; position: absolute; top: 100%; left: 0; right: 0; padding: 10px calc(14px + var(--safe-right)) 10px calc(14px + var(--safe-left));
     background: var(--surface); border-bottom: 1px solid var(--line); box-shadow: 0 6px 14px rgba(0,0,0,.1); }
-  .player.show-settings .settings input[type=range] { flex: 1 1 140px; }
+  .player.show-settings .settings input[type=range] { width: 100%; }
+  .player.show-settings .settings select { justify-self: start; }
+  .player.show-settings .settings #instrument { grid-column: 2 / -1; max-width: 100%; }
+  .player.show-settings .settings .check, .player.show-settings .settings .btn { grid-column: 1 / -1; justify-self: start; }
   .player.show-settings .settings-toggle { background: var(--accent-soft); border-color: var(--accent); }
 }
 @media (max-width: 640px) {
@@ -259,7 +268,7 @@ body.has-player .topbar { position: static; padding-left: 60px; }
   .lib-head input { min-width: 0; }
   .tune-table th, .tune-table td { padding: 8px 10px; }
   .tune-head .actions { width: 100%; }
-  .tune-head .actions > .btn, .tune-head .actions > .more { flex: 1 1 auto; }
+  .tune-head .actions > .btn, .tune-head .actions > .more { flex: 1 1 auto; justify-content: center; }
   .tune-head .actions > .more > summary { width: 100%; justify-content: center; }
   .row > .field { min-width: 0 !important; flex: 1 1 100%; }
   .row > .btn { flex: 1 1 auto; justify-content: center; }
@@ -272,7 +281,7 @@ body.has-player .topbar { position: static; padding-left: 60px; }
 }
 
 @media print {
-  .topbar, .player, .no-print, .original-pane, .tune-head .actions { display: none !important; }
+  #top, .no-print, .original-pane, .tune-head .actions { display: none !important; }
   body { background: #fff; }
   .tabview, .card { box-shadow: none; border: none; }
   .split.with-original { grid-template-columns: 1fr; }
@@ -287,9 +296,8 @@ body.has-player .topbar { position: static; padding-left: 60px; }
 .account .who { display: flex; flex-direction: column; padding: 6px 10px 8px; border-bottom: 1px solid var(--line); margin-bottom: 4px; overflow-wrap: anywhere; }
 .signin-needed { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); }
 #save-status:not(:empty) { margin-top: 10px; }
-/* phones: the logo already links to the library, so make room for the account button */
+/* phones: keep the Library button; the logo gives up its name first to make room */
 @media (max-width: 640px) {
-  .topbar nav .nav-library { display: none; }
   .topbar nav { flex: 0 0 auto; }
   .brand { min-width: 0; overflow: hidden; }
 }
@@ -338,3 +346,26 @@ body.has-player .topbar { position: static; padding-left: 60px; }
   .step-summary { flex-basis: 100%; margin-left: 40px; text-align: left; order: 3; }
   .step-body { padding: 0 12px 12px; }
 }
+
+/* License status */
+.badge.lic { font-weight: 600; white-space: nowrap; }
+.badge.lic-free { background: var(--accent-soft); color: var(--accent); }
+.badge.lic-attribution { background: color-mix(in srgb, var(--upper) 14%, var(--surface)); color: var(--upper); }
+.badge.lic-restricted { background: var(--hi-soft); color: var(--hi); }
+.btn.compact { font-size: .78rem; padding: 2px 10px; min-height: 0; }
+.lic-checking { display: inline-flex; align-items: center; gap: 6px; }
+.lic-checking .spinner { width: 12px; height: 12px; }
+.license-card .lic-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: space-between; }
+.license-card .lic-head h2 { margin: 0; }
+.license-card dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; }
+.license-card dt { color: var(--muted); }
+.license-card dd { margin: 0; }
+.license-card ul { margin: 4px 0 0; padding-left: 20px; }
+@media (max-width: 640px) { .license-card dl { grid-template-columns: 1fr; } .license-card dd { margin-bottom: 6px; } }
+button.badge.lic { border: none; font: inherit; font-size: .75rem; font-weight: 600; cursor: pointer; }
+button.badge.lic:hover { text-decoration: underline; }
+.license-card h3 { font-size: .95rem; margin: 18px 0 6px; }
+.license-card .lic-sources li + li { margin-top: 6px; }
+.license-dialog { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 64px); overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); padding: 18px; box-shadow: var(--shadow); }
+.license-dialog::backdrop { background: rgba(0, 0, 0, .4); }
+.license-dialog .row { margin-top: 14px; }

@@ -1,6 +1,7 @@
 // Renders the engraved score with a penny-whistle tab row under every line,
 // links notes <-> fingerings for click highlighting, and plays the tune.
 import { analyzeTune, fingerNumbers, markFor } from './core.js';
+import { chordFrets } from './guitar.js';
 
 // vertical room reserved under each system for the tab row
 const tabHeight = () => (getTabStyle() === 'holes' ? 103 : 45) + (getShowNoteNames() ? 15 : 0);
@@ -37,7 +38,7 @@ export function countHTML(holes, register = 1) {
   const t = fingerNumbers(holes);
   const mark = markFor(holes, register) ? `<span class="oct">${markFor(holes, register)}</span>` : '';
   const m = t.match(/^0\/(.+)$/);
-  return m ? `<span class="count open-top" aria-hidden="true"><small>0/</small>${m[1]}${mark}</span>` : `<span class="count" aria-hidden="true">${t}${mark}</span>`;
+  return m ? `<span class="count open-top" aria-hidden="true"><small>0/</small><span>${m[1]}${mark}</span></span>` : `<span class="count" aria-hidden="true">${t}${mark}</span>`;
 }
 
 const TAB_STYLE_KEY = 'pw-tab-style';
@@ -166,6 +167,7 @@ export class TabView {
         const it = r.item;
         if (it.invisible) return;
         const next = xs.slice(j + 1).find((v) => v != null) ?? lineEnd;
+        const prev = xs.slice(0, j).reverse().find((v) => v != null) ?? -Infinity;
         r.tabX = x;
         r.tabNext = next;
         const cell = document.createElement('button');
@@ -175,6 +177,8 @@ export class TabView {
         cell.dataset.i = r.index;
         const len = beatsLabel(it.beats);
         if (it.type === 'note') {
+          // "0/2" is too wide for closely spaced short notes: stack the "0/" above instead
+          if (Math.min(next - x, x - prev) < 30) cell.classList.add('tight');
           const shift = it.octaveShift ? `<span class="shift" title="Out of whistle range - played ${it.octaveShift > 0 ? 'an octave higher' : 'an octave lower'}">${it.octaveShift > 0 ? '8↑' : '8↓'}</span>` : '';
           const fingering = getTabStyle() === 'holes'
             ? `${holesSVG(it.holes)}<span class="reg">${registerMark(it) || '&nbsp;'}</span>`
@@ -233,8 +237,8 @@ export class TabView {
       cell.classList.add('active');
       if (scroll) {
         const rc = cell.getBoundingClientRect();
-        const bar = document.querySelector('body.has-player .player:not(.collapsed)'); // fixed over the top of the page
-        const top = (bar ? bar.getBoundingClientRect().bottom : 0) + 30;
+        const head = document.getElementById('top'); // stuck over the top of the page
+        const top = (head ? head.getBoundingClientRect().bottom : 0) + 30;
         if (rc.top < top || rc.bottom > window.innerHeight - 40) cell.scrollIntoView({ block: 'center', behavior: 'smooth' });
       }
     }
@@ -313,8 +317,6 @@ function wave(a) {
 // Recorded tin-whistle notes, prepared by scripts/prepare-samples.py into
 // public/sounds/whistle/: samples.json lists each file's measured pitch (fractional
 // MIDI) and loop points. Every note is played from the nearest recording, retuned.
-// Recorded tin-whistle notes, prepared by scripts/prepare-samples.py into
-// public/sounds/whistle/: samples.json lists each file's pitch and loop points.
 const SAMPLE_DIR = new URL('../sounds/whistle/', import.meta.url);
 let samples = []; // { midi, loopStart, loopEnd, buffer }, sorted by pitch
 let samplesLoading = null, samplesReady = false;
@@ -344,13 +346,91 @@ function nearestSample(midi) {
   return best;
 }
 
+// ---- other instruments: General MIDI notes from the soundfont abcjs uses, one MP3 per
+// note, fetched the first time a tune needs them. The penny whistle stays the default.
+const SOUNDFONT = 'https://paulrosen.github.io/midi-js-soundfonts/abcjs/';
+export const WHISTLE = 'pennywhistle';
+export const INSTRUMENTS = [ // [group, [[soundfont name, label], ...]]
+  ['', [[WHISTLE, 'Penny Whistle']]],
+  ['Pipes & flutes', [['flute', 'Flute'], ['piccolo', 'Piccolo'], ['recorder', 'Recorder'], ['pan_flute', 'Pan flute'],
+    ['ocarina', 'Ocarina'], ['shakuhachi', 'Shakuhachi'], ['whistle', 'Whistle (General MIDI)'], ['blown_bottle', 'Blown bottle']]],
+  ['Reeds', [['accordion', 'Accordion'], ['tango_accordion', 'Bandoneon'], ['harmonica', 'Harmonica'], ['bagpipe', 'Bagpipes'],
+    ['clarinet', 'Clarinet'], ['oboe', 'Oboe'], ['english_horn', 'Cor anglais'], ['bassoon', 'Bassoon'],
+    ['soprano_sax', 'Soprano sax'], ['alto_sax', 'Alto sax'], ['tenor_sax', 'Tenor sax'], ['shanai', 'Shehnai']]],
+  ['Strings', [['fiddle', 'Fiddle'], ['violin', 'Violin'], ['viola', 'Viola'], ['cello', 'Cello'], ['contrabass', 'Double bass'],
+    ['pizzicato_strings', 'Pizzicato strings'], ['string_ensemble_1', 'String ensemble'], ['orchestral_harp', 'Harp']]],
+  ['Plucked', [['acoustic_guitar_nylon', 'Nylon guitar'], ['acoustic_guitar_steel', 'Steel guitar'], ['electric_guitar_clean', 'Electric guitar'],
+    ['banjo', 'Banjo'], ['dulcimer', 'Dulcimer'], ['sitar', 'Sitar'], ['koto', 'Koto'], ['shamisen', 'Shamisen']]],
+  ['Keyboards', [['acoustic_grand_piano', 'Piano'], ['bright_acoustic_piano', 'Bright piano'], ['honkytonk_piano', 'Honky-tonk piano'],
+    ['electric_piano_1', 'Electric piano'], ['harpsichord', 'Harpsichord'], ['church_organ', 'Church organ'], ['reed_organ', 'Harmonium'],
+    ['drawbar_organ', 'Drawbar organ']]],
+  ['Bells & mallets', [['celesta', 'Celesta'], ['glockenspiel', 'Glockenspiel'], ['music_box', 'Music box'], ['vibraphone', 'Vibraphone'],
+    ['marimba', 'Marimba'], ['xylophone', 'Xylophone'], ['tubular_bells', 'Tubular bells'], ['kalimba', 'Kalimba'], ['steel_drums', 'Steel drums']]],
+  ['Brass', [['trumpet', 'Trumpet'], ['muted_trumpet', 'Muted trumpet'], ['trombone', 'Trombone'], ['french_horn', 'French horn'],
+    ['tuba', 'Tuba'], ['brass_section', 'Brass section']]],
+  ['Voices', [['choir_aahs', 'Choir'], ['voice_oohs', 'Voice']]],
+  ['Synth', [['lead_1_square', 'Square lead'], ['lead_2_sawtooth', 'Sawtooth lead'], ['lead_3_calliope', 'Calliope'],
+    ['pad_2_warm', 'Warm pad'], ['synth_strings_1', 'Synth strings']]],
+];
+const INSTRUMENT_NAMES = new Set(INSTRUMENTS.flatMap(([, list]) => list.map(([id]) => id)));
+const INSTRUMENT_KEY = 'pw-instrument';
+export function getInstrument() {
+  let v = null;
+  try { v = localStorage.getItem(INSTRUMENT_KEY); } catch { /* storage blocked */ }
+  return INSTRUMENT_NAMES.has(v) ? v : WHISTLE;
+}
+export function setInstrument(v) { try { localStorage.setItem(INSTRUMENT_KEY, v); } catch { /* storage blocked */ } }
+
+const NOTE_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']; // the soundfont's file names
+const gmNotes = new Map(); // `${instrument}:${midi}` -> Promise of { buffer, gain } (null when it would not load)
+const gmReady = new Map(); // the same, once settled
+let gmDecoder = null;
+const gmMidi = (midi) => Math.min(108, Math.max(21, Math.round(midi))); // A0..C8, the soundfont's range
+
+function loadGmNote(inst, midi) {
+  const key = `${inst}:${midi}`;
+  if (!gmNotes.has(key)) {
+    gmDecoder ||= new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 44100);
+    gmNotes.set(key, fetch(`${SOUNDFONT}${inst}-mp3/${NOTE_NAMES[midi % 12]}${Math.floor(midi / 12) - 1}.mp3`)
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${inst} ${midi}: ${r.status}`))))
+      .then((b) => gmDecoder.decodeAudioData(b))
+      .then((buffer) => {
+        // level-match the instruments: scale by the loudness of the note's first second
+        const d = buffer.getChannelData(0), n = Math.min(d.length, buffer.sampleRate);
+        let sum = 0;
+        for (let i = 0; i < n; i++) sum += d[i] * d[i];
+        const rms = Math.sqrt(sum / Math.max(1, n));
+        return { buffer, gain: rms > 1e-4 ? Math.min(6, 0.38 / rms) : 1 };
+      })
+      .catch(() => null) // a missing note falls back to the whistle
+      .then((note) => { gmReady.set(key, note); return note; }));
+  }
+  return gmNotes.get(key);
+}
+
+/** Load whatever the chosen instrument needs for these written pitches. */
+export function loadInstrument(midis, inst = getInstrument()) {
+  if (inst === WHISTLE) return loadSamples();
+  return Promise.all([...new Set(midis)].map((m) => loadGmNote(inst, gmMidi(m))));
+}
+function instrumentReady(midis, inst) {
+  return inst === WHISTLE ? samplesReady : midis.every((m) => gmReady.has(`${inst}:${gmMidi(m)}`));
+}
+
 /**
- * A penny-whistle note. Uses the nearest recorded note, retuned, once they have loaded;
- * otherwise a synthesized tone. A D whistle sounds an octave above the written pitch.
+ * A note on the chosen instrument (by default the one picked in the player settings). The
+ * penny whistle uses the nearest recorded note, retuned, once they have loaded, otherwise a
+ * synthesized tone; a D whistle sounds an octave above the written pitch. Other instruments
+ * play at the written pitch, falling back to the whistle for a note that has not loaded.
  */
-export function tone(midi, start, dur, level = 0.2, context = null, { fadeIn = 0, fadeOut = 0 } = {}) {
+export function tone(midi, start, dur, level = 0.2, context = null, { fadeIn = 0, fadeOut = 0, instrument = getInstrument() } = {}) {
   const a = context || audio(); // context: e.g. an OfflineAudioContext for rendering
   const t0 = Math.max(start ?? a.currentTime, a.currentTime);
+  if (instrument !== WHISTLE) {
+    const note = gmReady.get(`${instrument}:${gmMidi(midi)}`);
+    if (note) return gmTone(a, note, t0, t0 + dur, level, fadeOut);
+    loadGmNote(instrument, gmMidi(midi)); // e.g. a clicked note: ready for next time
+  }
   const s = nearestSample(midi + 12);
   if (s) sampleTone(a, s, midi + 12, t0, t0 + dur, level, fadeIn, fadeOut);
   else synthTone(a, midi, t0, t0 + Math.max(0.07, dur - 0.025), dur, level);
@@ -459,6 +539,22 @@ function sampleTone(a, s, target, t0, end, level, fadeIn, fadeOut) {
   src.stop(stop + 0.02);
 }
 
+/** One soundfont note from t0, released at `end` (a touch later when it runs into the next note). */
+function gmTone(a, note, t0, end, level, fadeOut) {
+  const src = a.createBufferSource();
+  src.buffer = note.buffer;
+  const vol = level * note.gain * Math.pow(10, ((Math.random() - 0.5) * 1.5) / 20);
+  const g = a.createGain();
+  g.gain.setValueAtTime(0, t0);
+  g.gain.linearRampToValueAtTime(vol, t0 + 0.005);
+  const off = Math.max(t0 + 0.01, fadeOut > 0 ? end + 0.02 : end - 0.02);
+  g.gain.setValueAtTime(vol, off);
+  g.gain.setTargetAtTime(0, off, 0.04); // a natural damping, ~0.2 s to silence
+  src.connect(g).connect(master(a));
+  src.start(t0);
+  src.stop(off + 0.3);
+}
+
 /** Synthesized fallback: a pure, slightly breathy tone with an air "chiff",
  *  a small pitch scoop at the start, and gentle vibrato on longer notes. */
 function synthTone(a, midi, t0, end, dur, level) {
@@ -521,6 +617,105 @@ function synthTone(a, midi, t0, end, dur, level) {
   for (const node of [osc, vib, breath, chiff]) { node.start(t0); node.stop(end + 0.05); }
 }
 
+// ---- guitar: chords strummed under the tune, from plucked-string (Karplus-Strong) samples
+const OPEN_STRINGS = [40, 45, 50, 55, 59, 64]; // E2 A2 D3 G3 B3 E4
+const plucks = new Map(); // `${sampleRate}:${midi}` -> AudioBuffer (usable by any context at that rate)
+function pluck(a, midi) {
+  const key = `${a.sampleRate}:${midi}`;
+  let buf = plucks.get(key);
+  if (buf) return buf;
+  const sr = a.sampleRate, len = Math.floor(sr * 3);
+  buf = a.createBuffer(1, len, sr);
+  const d = buf.getChannelData(0);
+  const n = Math.max(2, Math.round(sr / (440 * 2 ** ((midi - 69) / 12)) - 0.5)); // the averaging adds half a sample
+  let lp = 0, peak = 0;
+  for (let i = 0; i < n; i++) { lp += 0.5 * ((Math.random() * 2 - 1) - lp); d[i] = lp; } // soft pick: darkened noise
+  for (let i = n; i < len; i++) d[i] = 0.996 * 0.5 * (d[i - n] + d[i - n - 1 < 0 ? 0 : i - n - 1]);
+  for (let i = 0; i < len; i++) peak = Math.max(peak, Math.abs(d[i]));
+  if (peak) for (let i = 0; i < len; i++) d[i] /= peak;
+  plucks.set(key, buf);
+  return buf;
+}
+
+/** Strum a chord (low string to high) at t0, damped at `end`. False when the chord has no known shape. */
+function strum(a, name, t0, end, level = 0.055) {
+  const shape = chordFrets(name);
+  if (!shape) return false;
+  const frets = shape.includes(',') ? shape.split(',') : shape.split('');
+  const out = a.createGain();
+  out.gain.setValueAtTime(level, t0);
+  out.gain.setValueAtTime(level, end);
+  out.gain.linearRampToValueAtTime(0, end + 0.08);
+  out.connect(master(a));
+  let k = 0;
+  frets.forEach((f, s) => {
+    if (f === 'x') return;
+    const src = a.createBufferSource();
+    src.buffer = pluck(a, OPEN_STRINGS[s] + Number(f));
+    src.connect(out);
+    src.start(t0 + k++ * 0.014);
+    src.stop(end + 0.1);
+  });
+  return true;
+}
+
+/**
+ * Schedule the tune's notes, in play order, on audio context `a` from time `t`; returns the
+ * end time. sound: false only times the items. chords: strum the guitar chords too, on each
+ * chord change and at the start of each bar. onItem(idx, t) is called for every item.
+ */
+function schedule(a, v, bpm, order, t, { sound = true, chords = false, instrument = getInstrument(), onItem } = {}) {
+  const beatLen = (v.visual.getBeatLength && v.visual.getBeatLength()) || 0.25;
+  const wholeSec = (60 / bpm) / beatLen;
+  const den = v.data.meter.den;
+  const strums = []; // { t, chord }; chord null where the chords stop
+  order.forEach((idx, k) => {
+    const it = v.items[idx];
+    const dur = (it.beats / den) * wholeSec;
+    if (chords && sound) {
+      const chord = v.chordAt[idx] || null, bar = v.refs[idx].measureIndex;
+      const last = strums[strums.length - 1];
+      if (chord !== (last?.chord ?? null) || (chord && bar !== last.bar)) strums.push({ t, chord, bar });
+    }
+    if (it.type === 'note' && sound) {
+      // extend through following tied "hold" items
+      let held = dur;
+      let j = k + 1;
+      for (; j < order.length && v.items[order[j]].type === 'hold'; j++) held += (v.items[order[j]].beats / den) * wholeSec;
+      // one breath: notes flow into each other (a quick soft dip on repeated notes);
+      // only the start of a phrase, after a rest, gets the tongued attack
+      const prev = k > 0 ? v.items[order[k - 1]] : null;
+      const next = j < order.length ? v.items[order[j]] : null;
+      const join = (other) => (other.midi === it.midi ? REPEAT_DIP : SLUR);
+      tone(it.midi, t, held, undefined, a, {
+        fadeIn: prev && prev.type !== 'rest' ? join(prev) : 0,
+        fadeOut: next && next.type === 'note' ? join(next) : 0,
+        instrument,
+      });
+    }
+    if (onItem) onItem(idx, t);
+    t += dur;
+  });
+  strums.forEach((st, i) => { if (st.chord) strum(a, st.chord, st.t, strums[i + 1]?.t ?? t); });
+  return t;
+}
+
+/** The whole tune as Play sounds it at this tempo (with or without the guitar), rendered
+ *  offline into a stereo AudioBuffer. */
+export async function renderTune(view, bpm, { chords = false, instrument = getInstrument() } = {}) {
+  if (!view.items.length) throw new Error('There are no notes to play.');
+  await Promise.all([loadSamples(), loadInstrument(noteMidis(view), instrument)]);
+  const order = view.playOrder();
+  const lead = 0.15, tail = 1.5; // let the last note and the room ring out
+  const len = schedule(null, view, bpm, order, 0, { sound: false }) + lead + tail;
+  const rate = 44100;
+  const a = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(2, Math.ceil(len * rate), rate);
+  schedule(a, view, bpm, order, lead, { chords, instrument });
+  return a.startRendering();
+}
+
+const noteMidis = (view) => view.items.filter((it) => it.type === 'note').map((it) => it.midi);
+
 export class Player {
   constructor(view, { onStop } = {}) {
     this.view = view;
@@ -529,50 +724,38 @@ export class Player {
     this.playing = false;
   }
 
-  /** bpm counts the tune's beat unit (from Q: or the meter). Muted: no sound, the notes still highlight and scroll in time. */
-  play(bpm, fromItem = -1, { muted = false } = {}) {
+  /** bpm counts the tune's beat unit (from Q: or the meter). Muted: no sound, the notes still highlight and scroll in time.
+   *  chords: strum the guitar chords too, on each chord change and at the start of each bar. */
+  play(bpm, fromItem = -1, { muted = false, chords = false } = {}) {
     this.stop();
     const v = this.view;
     if (!v.items.length) return;
-    const beatLen = (v.visual.getBeatLength && v.visual.getBeatLength()) || 0.25;
-    const wholeSec = (60 / bpm) / beatLen;
-    const den = v.data.meter.den;
     let order = v.playOrder();
     if (fromItem >= 0) {
       const at = order.indexOf(fromItem);
       if (at > 0) order = order.slice(at);
     }
-    if (!muted && !samplesReady) { // first play: wait for the samples, then start
+    const instrument = getInstrument(), midis = noteMidis(v);
+    if (!muted && !instrumentReady(midis, instrument)) { // first play: wait for the notes, then start
       this.playing = true;
-      loadSamples().then(() => { if (this.playing) { this.playing = false; this.play(bpm, fromItem, { muted }); } });
+      const waiting = this.waiting = {};
+      loadInstrument(midis, instrument).then(() => {
+        if (this.playing && this.waiting === waiting) { this.playing = false; this.play(bpm, fromItem, { muted, chords }); }
+      });
       return;
     }
-    let t = (muted ? 0 : audio().currentTime) + 0.12;
-    const t0 = t;
+    const a = muted ? null : audio();
+    const t0 = (a ? a.currentTime : 0) + 0.12;
     this.playing = true;
-    order.forEach((idx, k) => {
-      const it = v.items[idx];
-      const dur = (it.beats / den) * wholeSec;
-      if (it.type === 'note' && !muted) {
-        // extend through following tied "hold" items
-        let sound = dur;
-        let j = k + 1;
-        for (; j < order.length && v.items[order[j]].type === 'hold'; j++) sound += (v.items[order[j]].beats / den) * wholeSec;
-        // one breath: notes flow into each other (a quick soft dip on repeated notes);
-        // only the start of a phrase, after a rest, gets the tongued attack
-        const prev = k > 0 ? v.items[order[k - 1]] : null;
-        const next = j < order.length ? v.items[order[j]] : null;
-        const join = (other) => (other.midi === it.midi ? REPEAT_DIP : SLUR);
-        tone(it.midi, t, sound, undefined, null, {
-          fadeIn: prev && prev.type !== 'rest' ? join(prev) : 0,
-          fadeOut: next && next.type === 'note' ? join(next) : 0,
-        });
-      }
-      const delay = (t - t0) * 1000 + 120;
-      if (!it.invisible) this.timers.push(setTimeout(() => v.select(idx, { source: 'play', scroll: true }), delay));
-      t += dur;
+    const end = schedule(a, v, bpm, order, t0, {
+      sound: !muted,
+      chords,
+      instrument,
+      onItem: (idx, t) => {
+        if (!v.items[idx].invisible) this.timers.push(setTimeout(() => v.select(idx, { source: 'play', scroll: true }), (t - t0) * 1000 + 120));
+      },
     });
-    this.timers.push(setTimeout(() => this.stop(), (t - t0) * 1000 + 1000)); // let the room ring out
+    this.timers.push(setTimeout(() => this.stop(), (end - t0) * 1000 + 1000)); // let the room ring out
   }
 
   stop() {

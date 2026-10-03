@@ -1,9 +1,9 @@
 import { analyzeTune, buildDisplayAbc, bestTranspose, whistleStats, cleanAbc, tabDocument, transposedKeyName } from './core.js';
 import { TabView, Player, tone, defaultBpm } from './render.js';
 import { renderPages, pagesToImages, showPages, ACCEPTED } from './originals.js';
-import { $, api, apiUrl, apiError, errorHTML, esc, topbar, renderNow, originalSources, tabStyleControl, isMuted } from './ui.js';
+import { $, api, apiUrl, apiError, errorHTML, esc, topbar, renderNow, originalSources, tabStyleControl, instrumentControl, isMuted } from './ui.js';
 
-$('#top').innerHTML = topbar();
+$('#top').insertAdjacentHTML('afterbegin', topbar());
 
 const EXAMPLES = [
   `X:1
@@ -190,11 +190,13 @@ window.addEventListener('resize', () => {
 // playback
 $('#tempo').addEventListener('input', () => { $('#tempo').dataset.touched = '1'; $('#tempo-v').textContent = $('#tempo').value; });
 function startPlay() {
-  player.play(Number($('#tempo').value), view.selected, { muted: isMuted() });
+  player.play(Number($('#tempo').value), view.selected, { muted: isMuted(), chords: $('#guitar').checked });
   $('#play').textContent = '■ Stop';
 }
 $('#play').addEventListener('click', () => (player.playing ? player.stop() : startPlay()));
 document.addEventListener('pw-mute', () => { if (player.playing) startPlay(); }); // carry on from the current note
+$('#guitar').addEventListener('change', () => { if (player.playing) startPlay(); });
+instrumentControl($('#instrument'), () => { if (player.playing) startPlay(); });
 document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, textarea, select')) return;
   if (e.key === 'ArrowRight') { view.step(1); e.preventDefault(); }
@@ -356,7 +358,7 @@ $('#save').addEventListener('click', async () => {
       transcription,
     };
     const rec = await api(existing ? `tunes/${existing.id}` : 'tunes', { method: 'POST', body: JSON.stringify(body) });
-    location.href = `tune.html?id=${encodeURIComponent(rec.id)}`;
+    location.href = `tune.html?id=${encodeURIComponent(rec.id)}${existing ? '' : '&check=license'}`;
   } catch (e) {
     // fetch() throws a TypeError when the request never got a response
     const msg = e instanceof TypeError

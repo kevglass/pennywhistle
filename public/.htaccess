@@ -11,14 +11,24 @@ DirectoryIndex index.html
 <IfModule mod_mime.c>
   AddType text/javascript .mjs
 </IfModule>
-# The host caches static files for 30 days by default, so phones kept running old
-# code after a deploy. Make browsers revalidate the app's own code (cheap 304s).
-<FilesMatch "\.(html|js|mjs|css)$">
-  <IfModule mod_expires.c>
-    ExpiresActive Off
-  </IfModule>
+# The host caches files for 30 days (2 days for the API) by default, so phones kept
+# running old code after a deploy. Turn that off for everything under the app, API included.
+<IfModule mod_expires.c>
+  ExpiresActive Off
+</IfModule>
+# Make browsers check every page and file with the server before using it (cheap 304s
+# when nothing changed). "always" is needed: the host serves .html through a handler
+# that the plain "Header set" never reached, so pages went out with no Cache-Control.
+<FilesMatch "\.(html?|js|mjs|css|svg|json)$">
   <IfModule mod_headers.c>
-    Header set Cache-Control "no-cache"
-    Header unset Expires
+    Header always set Cache-Control "no-cache, must-revalidate"
+    Header always unset Expires
   </IfModule>
 </FilesMatch>
+# The folder URL (/pennywhistle/) is served as index.html but may not match FilesMatch.
+<IfModule mod_headers.c>
+  <If "%{REQUEST_URI} =~ m#/$#">
+    Header always set Cache-Control "no-cache, must-revalidate"
+    Header always unset Expires
+  </If>
+</IfModule>

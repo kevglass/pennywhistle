@@ -1,4 +1,4 @@
-import { holesSVG, beatsLabel, getTabStyle, setTabStyle, getShowNoteNames, setShowNoteNames } from './render.js';
+import { holesSVG, beatsLabel, getTabStyle, setTabStyle, getShowNoteNames, setShowNoteNames, INSTRUMENTS, getInstrument, setInstrument } from './render.js';
 import { fingerNumbers, markFor } from './core.js';
 import { chordDiagramSVG } from './guitar.js';
 
@@ -76,6 +76,20 @@ document.addEventListener('click', (e) => { if (e.target.closest('#sign-out')) s
 const pretty = (n) => n.replace('#', '♯').replace(/b(\d|$)/, '♭$1');
 
 /** Compact read-out of the selected note, shown in the player bar. */
+/** Load a classic script (a vendor library) once; rel is relative to this folder. */
+const loaded = {};
+export function loadScript(rel) {
+  const url = new URL(rel, import.meta.url).href;
+  loaded[url] ??= new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = url;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error(`Could not load ${rel}`));
+    document.head.appendChild(s);
+  });
+  return loaded[url];
+}
+
 export function renderNow(el, item, { chord } = {}) {
   if (!item) {
     el.innerHTML = '<span class="empty-now">Tap a note to see its fingering</span>';
@@ -123,34 +137,50 @@ export function tabStyleControl(el, onChange) {
   names.addEventListener('change', () => { setShowNoteNames(names.checked); onChange(); });
 }
 
+/** The player's instrument picker (the penny whistle first); the choice is remembered. */
+export function instrumentControl(sel, onChange) {
+  sel.innerHTML = INSTRUMENTS.map(([group, list]) => {
+    const options = list.map(([id, label]) => `<option value="${id}">${esc(label)}</option>`).join('');
+    return group ? `<optgroup label="${esc(group)}">${options}</optgroup>` : options;
+  }).join('');
+  sel.value = getInstrument();
+  sel.addEventListener('change', () => { setInstrument(sel.value); onChange(); });
+}
+
 // ---- light / dark theme (light by default; the choice is remembered)
 const THEME_KEY = 'pw-theme';
 const isDark = () => document.documentElement.dataset.theme === 'dark';
 function themeButton() {
   const dark = isDark();
-  return `<button class="btn theme-toggle" id="theme-toggle" type="button" aria-pressed="${dark}" title="Switch to ${dark ? 'light' : 'dark'} mode" aria-label="Dark mode">${dark ? '☀' : '☾'}</button>`;
+  return `<button class="btn" id="theme-toggle" type="button">${dark ? '☀ Light mode' : '☾ Dark mode'}</button>`;
 }
-// ---- player bar: collapses to an icon at the top left (remembered)
+// ---- player bar: shown under the top bar, hidden and shown with the ♪ button in the top bar (remembered)
 const PLAYER_KEY = 'pw-player-collapsed';
-function setPlayerCollapsed(player, collapsed) {
-  player.classList.toggle('collapsed', collapsed);
-  player.classList.remove('show-settings');
+const playerCollapsed = () => document.body.classList.contains('player-collapsed');
+function setPlayerCollapsed(collapsed) {
+  const player = document.querySelector('.player');
+  player?.classList.toggle('collapsed', collapsed);
+  player?.classList.remove('show-settings');
   document.body.classList.toggle('player-collapsed', collapsed);
-  const btn = player.querySelector('.player-toggle');
-  btn.setAttribute('aria-expanded', String(!collapsed));
-  btn.setAttribute('aria-label', collapsed ? 'Show player' : 'Hide player');
-  btn.title = collapsed ? 'Show player' : 'Hide player';
+  const btn = document.querySelector('.player-toggle');
+  if (btn) {
+    btn.setAttribute('aria-pressed', String(!collapsed));
+    btn.title = collapsed ? 'Show player' : 'Hide player';
+    btn.setAttribute('aria-label', btn.title);
+  }
   try { localStorage.setItem(PLAYER_KEY, collapsed ? '1' : '0'); } catch { /* storage blocked */ }
 }
+function playerToggle() {
+  const collapsed = playerCollapsed(), label = collapsed ? 'Show player' : 'Hide player';
+  return `<button class="btn player-toggle" type="button" aria-pressed="${!collapsed}" aria-label="${label}" title="${label}">♪ Player</button>`;
+}
 document.addEventListener('click', (e) => {
-  const btn = e.target.closest('.player-toggle');
-  if (btn) { const p = btn.closest('.player'); setPlayerCollapsed(p, !p.classList.contains('collapsed')); }
+  if (e.target.closest('.player-toggle')) setPlayerCollapsed(!playerCollapsed());
 });
-{
-  const player = document.querySelector('.player');
+if (document.querySelector('.player')) {
   let collapsed = false;
   try { collapsed = localStorage.getItem(PLAYER_KEY) === '1'; } catch { /* storage blocked */ }
-  if (player) setPlayerCollapsed(player, collapsed);
+  setPlayerCollapsed(collapsed);
 }
 
 // ---- mute: play silently, the notes still highlight and the page scrolls in time (remembered)
@@ -204,14 +234,21 @@ document.addEventListener('click', (e) => {
 export function topbar(active) {
   return `<header class="topbar">
     <a class="brand" href="./" aria-label="Penny Whistle Tabs: library"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="13" width="26" height="6" rx="3" fill="var(--accent)"/><circle cx="12" cy="16" r="1.6" fill="var(--surface)"/><circle cx="17" cy="16" r="1.6" fill="var(--surface)"/><circle cx="22" cy="16" r="1.6" fill="var(--surface)"/><rect x="3" y="13" width="5" height="6" rx="2" fill="var(--ink)"/></svg><span class="brand-long">Penny Whistle Tabs</span><span class="brand-short">Whistle Tabs</span></a>
-    <nav><a class="btn nav-library ${active === 'library' ? 'primary' : ''}" href="./">Library</a>${themeButton()}<details class="more account" id="account" hidden>
+    <nav>${playerToggle()}<a class="btn nav-library ${active === 'library' ? 'primary' : ''}" href="./">Library</a><details class="more account" id="account" hidden>
       <summary class="btn" aria-label="Account"></summary>
-      <div class="menu"><div class="who"></div><a class="btn" id="friends-link" href="friends.html">Friends</a><button class="btn" id="sign-out" type="button">Sign out</button></div>
+      <div class="menu"><div class="who"></div><a class="btn" id="friends-link" href="friends.html">Friends</a>${themeButton()}<button class="btn" id="sign-out" type="button">Sign out</button></div>
     </details></nav>
   </header>`;
 }
 // topbar() is called synchronously by each page right after import, so the slot exists by the next tick.
 setTimeout(showUser);
+
+// The header (top bar, plus the player on tune pages) sticks to the top; publish its height so
+// sticky panes and scrolling into view keep clear of it.
+{
+  const head = document.getElementById('top');
+  if (head) new ResizeObserver(() => document.documentElement.style.setProperty('--head-h', `${head.offsetHeight}px`)).observe(head);
+}
 
 /** API route of a tune: your own, or a friend's (read-only, tune.owner is set). */
 export const tuneRoute = (id, owner) => (owner ? `friends/${owner}/tunes/${id}` : `tunes/${id}`);
@@ -223,3 +260,75 @@ export function originalSources(tune) {
   const base = tuneRoute(tune.id, tune.owner?.sub);
   return (tune.originals || []).map((o) => ({ url: apiUrl(`${base}/files/${o.file}`), type: o.type, name: o.originalName }));
 }
+
+// ------------------------------------------------------------ license check
+
+/** What each license status means for using the tune in a game or video. */
+export const LICENSE_STATUS = {
+  free: { label: 'Free to use', title: 'Public domain or free license: can be used in games and videos' },
+  attribution: { label: 'Free with credit', title: 'Can be used in games and videos if the conditions (e.g. a credit) are met' },
+  restricted: { label: 'Copyrighted', title: 'Needs permission or a paid license to use in a game or video' },
+  unknown: { label: 'Unclear', title: 'The license could not be established' },
+};
+
+export const COPYRIGHT_STATE = {
+  active: 'Still under copyright',
+  expired: 'Copyright has expired',
+  traditional: 'Traditional: no known author, never under copyright',
+  unknown: 'Not known',
+};
+
+/** A badge for a tune's license status (the summary on hover); a button that opens the details when clickable. */
+export function licenseBadge(license, { button = false } = {}) {
+  const s = LICENSE_STATUS[license?.status] || LICENSE_STATUS.unknown;
+  const tip = [license?.license, license?.summary || s.title].filter(Boolean).join(': ');
+  const cls = `badge lic lic-${esc(license?.status || 'unknown')}`;
+  return button
+    ? `<button type="button" class="${cls} show-license" title="${esc(tip)} (click for details)">${s.label}</button>`
+    : `<span class="${cls}" title="${esc(tip)}">${s.label}</span>`;
+}
+
+/** Everything a license check found: who owns the copyright, when it runs out, and the sources. */
+export function licenseDetailsHTML(lic) {
+  const row = (k, v) => (v ? `<dt>${k}</dt><dd>${esc(v)}</dd>` : '');
+  let expiry = lic.copyrightExpires;
+  if (expiry && /^\d{4}$/.test(expiry)) expiry = `${lic.copyright === 'active' ? 'Runs until the end of' : 'Expired at the end of'} ${expiry}`;
+  const sources = (lic.sources || []).map((x) => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.title)}</a>${x.supports ? `<div class="muted">${esc(x.supports)}</div>` : ''}</li>`).join('');
+  return `<p>${esc(lic.summary)}</p>
+    <h3>Use in games and videos</h3>
+    <dl>${row('Can I use it?', LICENSE_STATUS[lic.status]?.title)}${row('License', lic.license)}${row('Conditions', lic.conditions)}</dl>
+    <h3>Copyright</h3>
+    <dl>${row('Copyright', COPYRIGHT_STATE[lic.copyright])}${row('Written by', lic.composer)}${row('Written', lic.written)}${row('Composer died', lic.composerDied)}${row('Owned by', lic.rightsHolder)}${row('Copyright term', expiry)}${row('How we know', lic.copyrightBasis)}${row('Confidence', lic.confidence)}</dl>
+    ${lic.copyright ? '' : '<p class="muted small">This check was made before copyright dates were recorded. Check again to add them.</p>'}
+    ${lic.notes ? `<h3>Notes</h3><p class="small">${esc(lic.notes)}</p>` : ''}
+    ${sources ? `<h3>Where this came from</h3><ul class="small lic-sources">${sources}</ul>` : ''}
+    <p class="muted small">Checked ${new Date(lic.checkedAt).toLocaleDateString()} by Claude searching the web${lic.model ? ` (${esc(lic.model)})` : ''}. This is research, not legal advice: confirm with the rights holder before publishing anything commercial. It covers the tune itself; a recording or published arrangement can have its own copyright.</p>`;
+}
+
+/**
+ * A pop-up with a tune's license details. onCheck (optional) adds a Check again button;
+ * it gets the dialog so it can show progress and the new result in it.
+ */
+export function showLicenseDialog(title, lic, { onCheck } = {}) {
+  const dlg = document.createElement('dialog');
+  dlg.className = 'license-dialog license-card';
+  const fill = (l, extra = '') => {
+    dlg.innerHTML = `<div class="lic-head"><h2>${esc(title)} ${licenseBadge(l)}</h2><button class="btn" type="button" data-close aria-label="Close">✕</button></div>
+      ${extra}${licenseDetailsHTML(l)}
+      ${onCheck ? '<div class="row"><button class="btn" type="button" data-check>Check again</button></div>' : ''}`;
+  };
+  fill(lic);
+  dlg.addEventListener('click', async (e) => {
+    if (e.target === dlg || e.target.closest('[data-close]')) dlg.close();
+    if (e.target.closest('[data-check]')) {
+      e.target.closest('[data-check]').outerHTML = '<p class="lic-checking muted"><span class="spinner" aria-hidden="true"></span>Searching the web… (10–30 seconds)</p>';
+      try { fill(await onCheck()); } catch (err) { fill(lic, `<p>${errorHTML(err, 'Could not check the license', { newTab: true })}</p>`); }
+    }
+  });
+  dlg.addEventListener('close', () => dlg.remove());
+  document.body.append(dlg);
+  dlg.showModal();
+}
+
+/** Research a tune's license (Claude with web search, 10–30 s) and save it with the tune. */
+export const checkLicense = (id) => api(`tunes/${id}/license`, { method: 'POST' });
