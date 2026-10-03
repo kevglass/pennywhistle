@@ -67,6 +67,7 @@ async function showUser() {
       el.querySelector('summary').title += ` (${n} friend request${n === 1 ? '' : 's'})`;
       el.querySelector('#friends-link').insertAdjacentHTML('beforeend', ` <span class="badge accent">${n}</span>`);
     }
+    if (u.admin) el.querySelector('#friends-link').insertAdjacentHTML('afterend', '<a class="btn" href="users.html">Users</a>');
   } catch (e) {
     if (e.signIn) location.replace(loginUrl()); // every page with a topbar needs a signed-in user
   }

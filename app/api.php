@@ -18,6 +18,7 @@ require __DIR__ . '/claude.php';
 require __DIR__ . '/license.php';
 require __DIR__ . '/omr/musescore.php';
 require __DIR__ . '/friends.php';
+require __DIR__ . '/admin.php';
 
 // ------------------------------------------------------------------ config
 
@@ -349,6 +350,7 @@ function license_check(string $dir, array $tune, array $user): never
 // ------------------------------------------------------------------ auth (Google sign-in)
 
 const SESSION_DAYS = 30;
+const UPLOADS_BLOCKED = 'Adding new tunes has been turned off for your account. Ask the site owner to turn it back on.';
 
 /** Session cookie for the API folder only; sessions are files under DATA_DIR/sessions. */
 function start_session(): void
@@ -506,9 +508,14 @@ function handle(): never
 
     $user = current_user();
     if (!$user) send_json(401, ['error' => 'Please sign in', 'login' => true]);
-    if ($route === 'auth/me' && $method === 'GET') send_json(200, $user + ['friendRequests' => friend_request_count($user)]);
-    if ($route === 'transcribe' && $method === 'POST') transcribe();
+    $blocked = uploads_blocked($user['sub']);
+    if ($route === 'auth/me' && $method === 'GET') send_json(200, $user + ['friendRequests' => friend_request_count($user), 'admin' => is_admin($user), 'uploadsBlocked' => $blocked]);
+    if ($route === 'transcribe' && $method === 'POST') {
+        if ($blocked) send_json(403, ['error' => UPLOADS_BLOCKED]);
+        transcribe();
+    }
     if (in_array($parts[0] ?? '', ['friends', 'library'], true)) handle_friends($user, $parts, $method);
+    if (($parts[0] ?? '') === 'admin') handle_admin($user, $parts, $method);
     if (($parts[0] ?? '') !== 'tunes') send_json(404, ['error' => 'Not found']);
     define('TUNES_DIR', user_dir($user['sub']) . '/tunes');
     ensure_dir(TUNES_DIR);
@@ -517,6 +524,7 @@ function handle(): never
     if ($id === null && $method === 'GET') send_json(200, list_tunes(TUNES_DIR));
 
     if ($id === null && $method === 'POST') {
+        if ($blocked) send_json(403, ['error' => UPLOADS_BLOCKED]);
         $meta = meta_from_request();
         $rec = tune_record($meta, null);
         $rec['id'] = slug($rec['title']) . '-' . bin2hex(random_bytes(3));

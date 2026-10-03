@@ -383,6 +383,12 @@ $('#save').addEventListener('click', async () => {
     }
   } catch { window.__canTranscribe = false; }
 
+  if (!editId && (await api('auth/me').catch(() => ({}))).uploadsBlocked) {
+    document.querySelectorAll('.step').forEach((el) => { el.hidden = true; });
+    $('#heading').parentElement.insertAdjacentHTML('afterend', '<section class="card"><p class="error" style="margin:0">Adding new tunes has been turned off for your account. Ask the site owner to turn it back on.</p></section>');
+    return;
+  }
+
   if (editId) {
     try {
       existing = await api(`tunes/${editId}`);

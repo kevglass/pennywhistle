@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Users · Penny Whistle Tabs</title>
+<script>try{if(localStorage.getItem('pw-theme')==='dark')document.documentElement.dataset.theme='dark'}catch(e){}</script>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="top"></div>
+<main class="friends-page">
+  <h1>Users</h1>
+  <p class="muted">Everyone who has signed in, and how many tunes they have saved. Blocking someone stops them adding new tunes (and reading music with Claude); they can still open, edit and delete the tunes they have.</p>
+
+  <section class="card stack">
+    <h2 id="count">Registered users</h2>
+    <ul class="person-list" id="users"><li class="muted"><span class="spinner"></span> Loading…</li></ul>
+  </section>
+</main>
+<script type="module">
+import { $, api, esc, errorHTML, topbar } from './js/ui.js';
+$('#top').innerHTML = topbar();
+
+const avatar = (p) => (p.picture
+  ? `<img class="avatar" src="${esc(p.picture)}" alt="" referrerpolicy="no-referrer" width="36" height="36">`
+  : `<span class="avatar">${esc((p.name || p.email || '?').trim().charAt(0).toUpperCase())}</span>`);
+const when = (iso) => (iso ? new Date(iso).toLocaleDateString() : 'never');
+
+function draw(users) {
+  const tunes = users.reduce((n, u) => n + u.tunes, 0);
+  $('#count').textContent = `${users.length} registered user${users.length === 1 ? '' : 's'} · ${tunes} tune${tunes === 1 ? '' : 's'}`;
+  $('#users').innerHTML = users.map((u) => `<li class="person">${avatar(u)}
+    <div class="who"><strong>${esc(u.name || u.email)}${u.admin ? ' <span class="badge accent">Admin</span>' : ''}</strong>
+      <span class="muted small">${esc(u.email)}</span>
+      <span class="small"><strong>${u.tunes}</strong> tune${u.tunes === 1 ? '' : 's'}${u.lastTuneAt ? ` · last saved ${when(u.lastTuneAt)}` : ''} · signed in ${when(u.lastLogin)}</span></div>
+    <div class="acts">${u.uploadsBlocked
+      ? `<span class="badge lic lic-restricted">Blocked</span><button class="btn primary" data-sub="${esc(u.sub)}" data-blocked="false">Allow uploads</button>`
+      : `<span class="badge lic lic-free">Allowed</span><button class="btn danger" data-sub="${esc(u.sub)}" data-blocked="true">Block uploads</button>`}</div></li>`).join('')
+    || '<li class="muted">Nobody has signed in yet.</li>';
+}
+
+document.addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('button[data-sub]');
+  if (!btn) return;
+  btn.disabled = true;
+  try {
+    draw(await api(`admin/users/${btn.dataset.sub}/uploads`, { method: 'POST', body: JSON.stringify({ blocked: btn.dataset.blocked === 'true' }) }));
+  } catch (e) {
+    btn.disabled = false;
+    alert(e.message);
+  }
+});
+
+try { draw(await api('admin/users')); }
+catch (e) { $('#users').innerHTML = `<li>${errorHTML(e, 'Could not load the users')}</li>`; }
+</script>
+</body>
+</html>

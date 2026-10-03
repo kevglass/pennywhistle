@@ -12,6 +12,7 @@ Turn sheet music (PDF or photos/scans) into easy-to-follow **D tin whistle tabla
 - **Best key for whistle** finds a transposition that keeps every note in range with as little half-holing as possible.
 - Approving a tab saves it to the **library** (the index page). Saved tunes can be opened later, with an optional **Show original music** panel beside the tab.
 - **License check**: Claude searches the web to find out who wrote each tune, whether it is still under copyright, and whether it can be used for free in a game or video. Checks only run when you press a **Check** button, in the library's License column or under a tune's title (on your tunes or a friend's). Checking a friend's tune saves the result in their library too (the only change a friend can make to a tune). The library shows each tune's status (Free to use, Free with credit, Copyrighted or Unclear). Click the status, in the library or under a tune's title, to open a pop-up with the details: who wrote it and when, who owns the copyright, when it expired or will expire and how that was worked out, and the sources with what each one showed. This is research, not legal advice.
+- **Users** (in the account menu, only for `ADMIN_EMAILS`): everyone who has signed in, how many tunes each has saved and when, with **Block uploads** / **Allow uploads**. A blocked account can't save new tunes or have Claude read music, but can still open, edit and delete its tunes.
 - **Friends** (in the account menu): add a friend by email address and they get an email about the request, which they can accept or ignore on their friends page. Friends see each other's tunes in their library, in a section per friend, and can open them but not change them. Search covers every tune you can see.
 
 ## Hosting requirements
@@ -39,6 +40,7 @@ Avoid ports browsers block as unsafe (e.g. 6000, 6665-6669). Without an API key 
 | `PORT` | Local dev server port (`./dev.sh`) |
 | `DATA_DIR` | Where tunes are stored, defaults to `data/` next to the app code |
 | `GOOGLE_CLIENT_ID` | Required: OAuth client ID for Google sign-in (see below) |
+| `ADMIN_EMAILS` | Comma-separated emails or `@domain`s that get a **Users** page in the account menu: every registered user with how many tunes they've saved, and a button to block or allow them adding more. Empty means nobody |
 | `ALLOWED_EMAILS` | Optional: comma-separated emails or `@domain`s allowed to sign in. Empty lets any Google account in, and transcriptions cost API credits |
 | `SITE_URL` | Optional: the site's address for links in friend request emails, e.g. `https://cokeandcode.com/pennywhistle`. Otherwise taken from the server name |
 | `MAIL_FROM` | Optional: sender address for friend request emails (sent with PHP's `mail()`), defaults to `noreply@<server name>` |
@@ -94,6 +96,7 @@ Each Google account has a folder, named by its Google account ID, and each appro
 data/users/<google-id>/
   user.json        email and name of the account, last sign-in
   friends.json     friends (by Google ID) and friend requests this account has sent
+  access.json      whether an admin has blocked this account from adding tunes
   tunes/<id>/
     tune.json        everything about the tune (see below)
     tune.abc         the displayed notation (after transposing and adding chords)
@@ -108,7 +111,7 @@ Friend requests are filed by email address, so they can be sent to someone who h
 ## Code map
 
 - `public/`: the static site. `js/core.js` holds the fingering chart, tab data, chord suggestion and best-key search. `js/render.js` draws the score with [abcjs](https://www.abcjs.net/) plus the tab rows, highlighting and playback. PDFs are rendered in the browser with [PDF.js](https://mozilla.github.io/pdf.js/). Both libraries are bundled in `public/vendor/`.
-- `public/api/index.php` → `app/api.php`: the API (`?r=config`, `auth/google`, `auth/me`, `auth/logout`, `tunes`, `tunes/<id>`, `tunes/<id>/files/<file>`, `tunes/<id>/delete`, `tunes/<id>/license`, `library`, `friends`, `friends/request|accept|ignore|cancel|remove`, `friends/<google-id>/tunes/<id>[/license]`, `transcribe`). Friend code is in `app/friends.php`; the license check (Claude with web search and a JSON schema for the answer) is in `app/license.php`. Transcription streams from Claude through the official Anthropic PHP SDK, with server-side fallback if a request is declined.
+- `public/api/index.php` → `app/api.php`: the API (`?r=config`, `auth/google`, `auth/me`, `auth/logout`, `tunes`, `tunes/<id>`, `tunes/<id>/files/<file>`, `tunes/<id>/delete`, `tunes/<id>/license`, `library`, `friends`, `friends/request|accept|ignore|cancel|remove`, `friends/<google-id>/tunes/<id>[/license]`, `admin/users`, `admin/users/<google-id>/uploads`, `transcribe`). Friend code is in `app/friends.php`, user admin in `app/admin.php`; the license check (Claude with web search and a JSON schema for the answer) is in `app/license.php`. Transcription streams from Claude through the official Anthropic PHP SDK, with server-side fallback if a request is declined.
 - `app/omr/`: the MuseScore 4 PDF reader, in plain PHP. `pdf.php` parses the PDF and `content.php` runs each page's drawing commands to list the glyphs, lines and filled shapes. `musescore.php` rebuilds the music from them: MuseScore draws every notehead, rest, clef and accidental as a glyph of its SMuFL font (Leland) at an exact position, so pitch comes from a notehead's height on the staff and length from its shape plus the flags and beams on its stem. Text (titles, chord symbols, endings) uses Edwin, which MuseScore embeds without a character map; its glyphs are identified by their metrics using `edwin-metrics.json` (built by `scripts/edwin-metrics.py`). If the PDF isn't from MuseScore, or too many bars don't add up to the time signature, the API falls back to Claude.
 - `scripts/secrets.php`, `deploy.sh`, `dev.sh`: tooling.
 - `samples/`: public-domain and CC-licensed sheet music for testing (see `samples/README.md`).
