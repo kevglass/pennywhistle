@@ -358,7 +358,7 @@ $('#save').addEventListener('click', async () => {
       transcription,
     };
     const rec = await api(existing ? `tunes/${existing.id}` : 'tunes', { method: 'POST', body: JSON.stringify(body) });
-    location.href = `tune.html?id=${encodeURIComponent(rec.id)}${existing ? '' : '&check=license'}`;
+    location.href = `tune.html?id=${encodeURIComponent(rec.id)}`;
   } catch (e) {
     // fetch() throws a TypeError when the request never got a response
     const msg = e instanceof TypeError

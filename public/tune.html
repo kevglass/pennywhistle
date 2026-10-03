@@ -146,12 +146,6 @@ try {
   $('#meta').insertAdjacentHTML('beforeend', '<span id="license-slot" aria-live="polite"></span>');
   canCheck = !!(await api('config').catch(() => ({}))).licenseCheck;
   renderLicense();
-  // A newly saved tune is checked straight away.
-  if (params.get('check') === 'license') {
-    params.delete('check');
-    history.replaceState(null, '', `?${params}`);
-    if (!tune.license && !tune.owner && canCheck) runLicenseCheck();
-  }
   $('#edit').href = `editor.html?id=${encodeURIComponent(tune.id)}`;
   if (tune.owner) $('#edit').hidden = $('#delete').hidden = true;
   $('#json').href = URL.createObjectURL(new Blob([JSON.stringify(tune, null, 2)], { type: 'application/json' }));
