@@ -317,8 +317,8 @@ function transcribe(): never
 
 // ------------------------------------------------------------------ license check
 
-/** Research the tune's license with Claude and web search, and save it in tune.json. */
-function license_check(string $dir, array $tune): never
+/** Research the tune's license with Claude and web search, and save it in tune.json (noting who asked). */
+function license_check(string $dir, array $tune, array $user): never
 {
     if (!has_key()) send_json(503, ['error' => 'License checks need Claude: set ANTHROPIC_API_KEY in the server .env file.']);
     set_time_limit(300);
@@ -339,6 +339,7 @@ function license_check(string $dir, array $tune): never
     // Re-read the tune: it may have been edited while Claude was searching.
     $current = load_tune(dirname($dir), $tune['id']);
     if (!$current) send_json(404, ['error' => 'Tune not found']);
+    $license['checkedBy'] = $user['name'] ?: $user['email'];
     $current['license'] = $license;
     write_json_atomic("$dir/tune.json", $current);
     send_json(200, $license);
@@ -521,7 +522,7 @@ function handle(): never
 
     if ($action === 'files' && isset($parts[3]) && $method === 'GET') serve_original($dir, $existing, $parts[3]);
     if ($action === '' && $method === 'GET') send_json(200, $existing);
-    if ($action === 'license' && $method === 'POST') license_check($dir, $existing);
+    if ($action === 'license' && $method === 'POST') license_check($dir, $existing, $user);
     if ($action === '' && $method === 'POST') { // update (POST for compatibility with simple hosts)
         $meta = meta_from_request();
         $rec = tune_record($meta, $existing);

@@ -263,6 +263,16 @@ function handle_friends(array $user, array $parts, string $method): never
         send_json(200, $tune + ['owner' => user_info($owner)]);
     }
 
+    // Friends may check the license of each other's tunes: only the license is saved to the tune.
+    if (($parts[2] ?? '') === 'tunes' && isset($parts[3]) && ($parts[4] ?? '') === 'license' && $method === 'POST') {
+        $owner = $action;
+        if (!valid_sub($owner) || !is_friend($user['sub'], $owner)) send_json(404, ['error' => 'Tune not found']);
+        $dir = user_dir($owner) . '/tunes';
+        $tune = load_tune($dir, $parts[3]);
+        if (!$tune) send_json(404, ['error' => 'Tune not found']);
+        license_check("$dir/{$tune['id']}", $tune, $user);
+    }
+
     if ($method !== 'POST') send_json(405, ['error' => 'Method not allowed']);
     if (!str_starts_with($_SERVER['CONTENT_TYPE'] ?? '', 'application/json')) send_json(415, ['error' => 'Expected JSON']);
     $body = read_json_body();

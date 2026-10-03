@@ -36,11 +36,11 @@ let loaded = false;
 let canCheck = false; // the server has a Claude API key
 const checking = new Set(); // ids of tunes whose license is being checked
 
-// The license status; your own unchecked tunes get a button to check it.
+// The license status; unchecked tunes (yours or a friend's) get a button to check it.
 const licenseCell = (t, owner) => {
   if (t.license) return licenseBadge(t.license, { button: true });
-  if (checking.has(t.id)) return '<span class="lic-checking muted small"><span class="spinner" aria-hidden="true"></span>Checking…</span>';
-  if (owner || !canCheck) return '<span class="muted small">Not checked</span>';
+  if (checking.has(`${owner || ''}/${t.id}`)) return '<span class="lic-checking muted small"><span class="spinner" aria-hidden="true"></span>Checking…</span>';
+  if (!canCheck) return '<span class="muted small">Not checked</span>';
   return `<button class="btn compact check-license" type="button" data-id="${esc(t.id)}" title="Look up who owns the rights to this tune and whether it can be used for free in a game or video">Check</button>`;
 };
 
@@ -102,24 +102,25 @@ $('#list').addEventListener('click', async (e) => {
     const { id, owner } = badge.closest('td').dataset;
     const t = findTune(id, owner);
     if (!t) return;
-    // Your own tunes can be checked again from the pop-up.
-    const onCheck = !owner && canCheck ? async () => { t.license = await checkLicense(t.id); draw(); return t.license; } : undefined;
+    const onCheck = canCheck ? async () => { t.license = await checkLicense(t.id, owner); draw(); return t.license; } : undefined;
     showLicenseDialog(t.title, t.license, { onCheck });
     return;
   }
   const btn = e.target.closest('.check-license');
   if (btn) {
-    const t = lib.mine.find((x) => x.id === btn.dataset.id);
+    const { id, owner } = btn.closest('td').dataset;
+    const t = findTune(id, owner);
     if (!t) return;
-    checking.add(t.id);
+    const key = `${owner}/${id}`;
+    checking.add(key);
     draw();
     try {
-      t.license = await checkLicense(t.id);
+      t.license = await checkLicense(id, owner);
     } catch (err) {
       if (err.signIn) location.href = loginUrl();
       else alert(`Could not check the license of “${t.title}”: ${err.message}`);
     } finally {
-      checking.delete(t.id);
+      checking.delete(key);
       draw();
     }
     return;

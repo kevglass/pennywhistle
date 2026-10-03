@@ -302,7 +302,7 @@ export function licenseDetailsHTML(lic) {
     ${lic.copyright ? '' : '<p class="muted small">This check was made before copyright dates were recorded. Check again to add them.</p>'}
     ${lic.notes ? `<h3>Notes</h3><p class="small">${esc(lic.notes)}</p>` : ''}
     ${sources ? `<h3>Where this came from</h3><ul class="small lic-sources">${sources}</ul>` : ''}
-    <p class="muted small">Checked ${new Date(lic.checkedAt).toLocaleDateString()} by Claude searching the web${lic.model ? ` (${esc(lic.model)})` : ''}. This is research, not legal advice: confirm with the rights holder before publishing anything commercial. It covers the tune itself; a recording or published arrangement can have its own copyright.</p>`;
+    <p class="muted small">Checked ${new Date(lic.checkedAt).toLocaleDateString()}${lic.checkedBy ? ` for ${esc(lic.checkedBy)}` : ''} by Claude searching the web${lic.model ? ` (${esc(lic.model)})` : ''}. This is research, not legal advice: confirm with the rights holder before publishing anything commercial. It covers the tune itself; a recording or published arrangement can have its own copyright.</p>`;
 }
 
 /**
@@ -330,5 +330,5 @@ export function showLicenseDialog(title, lic, { onCheck } = {}) {
   dlg.showModal();
 }
 
-/** Research a tune's license (Claude with web search, 10–30 s) and save it with the tune. */
-export const checkLicense = (id) => api(`tunes/${id}/license`, { method: 'POST' });
+/** Research a tune's license (Claude with web search, 10–30 s) and save it with the tune; owner is set for a friend's tune. */
+export const checkLicense = (id, owner) => api(`${tuneRoute(id, owner)}/license`, { method: 'POST' });
