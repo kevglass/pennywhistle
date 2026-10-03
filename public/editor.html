@@ -9,39 +9,61 @@
 <link rel="stylesheet" href="css/app.css">
 <script src="vendor/abcjs-basic-min.js"></script>
 </head>
-<body class="has-player">
+<body>
 <div id="top"></div>
 <main class="stack">
   <div>
     <h1 id="heading">New tab from sheet music</h1>
-    <p class="muted" style="margin:0">Upload the music, let Claude read it, check the result against the original, then approve it to save it to the library.</p>
+    <p class="muted" style="margin:0">Upload the music, let Claude convert it, then check the tab and approve it to save it to the library.</p>
   </div>
 
-  <section class="card stack" id="step-upload" aria-labelledby="h-upload">
-    <h2 id="h-upload">1. Original music</h2>
-    <div class="dropzone" id="drop" tabindex="0" role="button" aria-label="Choose sheet music files">
-      <div><strong>Choose a PDF or image files</strong> or drop them here</div>
-      <div class="muted small">PDF, PNG, JPG or WebP. Several images are read as pages, in the order chosen.</div>
-      <input type="file" id="file" accept="application/pdf,image/png,image/jpeg,image/webp,image/gif" multiple hidden>
-    </div>
-    <div id="thumbs" class="thumbs"></div>
-    <div class="row">
-      <div class="field" style="flex:1;min-width:220px">
-        <label for="hint">Note for Claude (optional)</label>
-        <input type="text" id="hint" placeholder="e.g. melody is the top line of the right hand; ignore the second verse">
+  <section class="card step" id="step-upload" data-step="1">
+    <button class="step-head" type="button" aria-expanded="true" aria-controls="body-upload">
+      <span class="step-num" aria-hidden="true">1</span>
+      <span class="step-title">Upload sheet music</span>
+      <span class="step-summary" id="sum-upload"></span>
+    </button>
+    <div class="step-body stack" id="body-upload">
+      <div class="dropzone" id="drop" tabindex="0" role="button" aria-label="Choose sheet music files">
+        <div><strong>Choose a PDF or image files</strong> or drop them here</div>
+        <div class="muted small">PDF, PNG, JPG or WebP. Several images are read as pages, in the order chosen.</div>
+        <input type="file" id="file" accept="application/pdf,image/png,image/jpeg,image/webp,image/gif" multiple hidden>
       </div>
-      <button class="btn primary" id="read" disabled>Read the music with Claude</button>
+      <div id="thumbs" class="thumbs"></div>
+      <div id="upload-status" class="status" aria-live="polite"></div>
+      <p class="muted small" style="margin:0">No file? <button class="btn" id="example" type="button">Load an example</button></p>
     </div>
-    <div id="status" class="status" aria-live="polite"></div>
-    <p class="muted small" style="margin:0">No file? <button class="btn" id="example" type="button">Load an example</button> or type/paste ABC notation in step 2.</p>
   </section>
 
-  <section class="card stack" id="step-review" aria-labelledby="h-review">
-    <div class="approve-bar">
-      <h2 id="h-review" style="margin:0">2. Check & adjust</h2>
+  <section class="card step" id="step-convert" data-step="2">
+    <button class="step-head" type="button" aria-expanded="false" aria-controls="body-convert">
+      <span class="step-num" aria-hidden="true">2</span>
+      <span class="step-title">Convert the music</span>
+      <span class="step-summary" id="sum-convert"></span>
+    </button>
+    <div class="step-body stack" id="body-convert" hidden>
+      <p class="muted" style="margin:0">PDFs exported from MuseScore are read directly. Anything else is read by Claude, which picks out the melody and chords.</p>
       <div class="row">
-        <button class="btn" id="toggle-original" aria-pressed="false" hidden>Show original</button>
+        <div class="field" style="flex:1;min-width:220px">
+          <label for="hint">Note for Claude (optional)</label>
+          <input type="text" id="hint" placeholder="e.g. melody is the top line of the right hand; ignore the second verse">
+        </div>
+        <button class="btn primary" id="read" disabled>Process Music File</button>
       </div>
+      <div id="status" class="status" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="card step" id="step-review" data-step="3">
+    <button class="step-head" type="button" aria-expanded="false" aria-controls="body-review">
+      <span class="step-num" aria-hidden="true">3</span>
+      <span class="step-title">Generate tab</span>
+      <span class="step-summary" id="sum-review"></span>
+    </button>
+    <div class="step-body stack" id="body-review" hidden>
+    <div class="approve-bar">
+      <p class="muted small" id="review-hint" style="margin:0">Check the tab, pick a key and chords, then approve.</p>
+      <button class="btn" id="toggle-original" aria-pressed="false" hidden>Show original</button>
     </div>
     <div class="row">
       <div class="field" style="flex:1;min-width:200px"><label for="title">Title</label><input type="text" id="title"></div>
@@ -65,6 +87,7 @@
           <div class="controls">
             <button class="player-toggle" type="button" aria-expanded="true" aria-label="Hide player" title="Hide player"><span class="when-open" aria-hidden="true">‹</span><span class="when-closed" aria-hidden="true">♪</span></button>
             <button class="btn" id="play" type="button">▶ Play</button>
+            <button class="btn mute-toggle" type="button" aria-pressed="false" aria-label="Mute"></button>
             <button class="btn settings-toggle" type="button" aria-expanded="false" aria-label="Player settings">⚙</button>
             <div class="settings">
               <label for="tempo">Tempo</label><input type="range" id="tempo" min="30" max="220" value="90"><span id="tempo-v" class="small">90</span>
@@ -77,20 +100,18 @@
       </div>
     </div>
 
-    <details>
-      <summary>Notation (ABC): edit to fix any misread notes</summary>
-      <p class="muted small">Pitches: C D E F G A B c d e f g a b (lowercase = higher octave, <code>'</code> up, <code>,</code> down). Length: <code>A2</code> long, <code>A/2</code> short, <code>z</code> rest, <code>-</code> tie. Chords in quotes before a note: <code>"G"B</code>. The preview updates as you type.</p>
-      <textarea id="abc" rows="14" spellcheck="false" aria-label="ABC notation"></textarea>
-      <div id="abc-error" class="error small" aria-live="polite"></div>
-    </details>
+    <!-- The notation is kept as data only; it is never shown. -->
+    <textarea id="abc" hidden aria-hidden="true"></textarea>
+    <div id="abc-error" class="error small" aria-live="polite"></div>
 
     <div class="approve-bar">
-      <span class="muted small">Approving saves the music (as ABC notation) and the tab to the library. The uploaded pages aren't kept.</span>
+      <span class="muted small">Approving saves the tab to the library. The uploaded pages aren't kept.</span>
       <div class="row">
         <a class="btn" href="./" id="cancel">Cancel</a>
         <button class="btn primary" id="save" disabled>Approve & save</button>
       </div>
       <div id="save-status" aria-live="polite"></div>
+    </div>
     </div>
   </section>
 </main>

@@ -61,6 +61,12 @@ async function showUser() {
     el.querySelector('summary').title = `Signed in as ${u.name || u.email}`;
     el.querySelector('summary').setAttribute('aria-label', el.querySelector('summary').title);
     el.querySelector('.who').innerHTML = `<strong>${esc(u.name)}</strong><span class="muted small">${esc(u.email)}</span>`;
+    if (u.friendRequests) {
+      const n = u.friendRequests;
+      el.querySelector('summary').insertAdjacentHTML('beforeend', `<span class="dot" aria-hidden="true"></span>`);
+      el.querySelector('summary').title += ` (${n} friend request${n === 1 ? '' : 's'})`;
+      el.querySelector('#friends-link').insertAdjacentHTML('beforeend', ` <span class="badge accent">${n}</span>`);
+    }
   } catch (e) {
     if (e.signIn) location.replace(loginUrl()); // every page with a topbar needs a signed-in user
   }
@@ -147,6 +153,32 @@ document.addEventListener('click', (e) => {
   if (player) setPlayerCollapsed(player, collapsed);
 }
 
+// ---- mute: play silently, the notes still highlight and the page scrolls in time (remembered)
+const MUTE_KEY = 'pw-muted';
+const SPEAKER = '<path d="M4 9h3l5-4v14l-5-4H4z" fill="currentColor"/>';
+const muteIcon = (muted) => `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none">${SPEAKER}${
+  muted ? '<path d="M16 9l5 6M21 9l-5 6"/>' : '<path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>'}</svg>`;
+export const isMuted = () => document.querySelector('.mute-toggle')?.getAttribute('aria-pressed') === 'true';
+function setMuted(btn, muted) {
+  btn.setAttribute('aria-pressed', String(muted));
+  btn.title = muted ? 'Muted: notes highlight without sound' : 'Mute (follow along without sound)';
+  btn.innerHTML = muteIcon(muted);
+}
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.mute-toggle');
+  if (!btn) return;
+  const muted = btn.getAttribute('aria-pressed') !== 'true';
+  setMuted(btn, muted);
+  try { localStorage.setItem(MUTE_KEY, muted ? '1' : '0'); } catch { /* storage blocked */ }
+  document.dispatchEvent(new Event('pw-mute'));
+});
+{
+  const btn = document.querySelector('.mute-toggle');
+  let muted = false;
+  try { muted = localStorage.getItem(MUTE_KEY) === '1'; } catch { /* storage blocked */ }
+  if (btn) setMuted(btn, muted);
+}
+
 // Small-screen helpers: player settings toggle, and closing the "More" menu on outside taps.
 document.addEventListener('click', (e) => {
   const st = e.target.closest('.settings-toggle');
@@ -172,15 +204,22 @@ document.addEventListener('click', (e) => {
 export function topbar(active) {
   return `<header class="topbar">
     <a class="brand" href="./" aria-label="Penny Whistle Tabs: library"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="13" width="26" height="6" rx="3" fill="var(--accent)"/><circle cx="12" cy="16" r="1.6" fill="var(--surface)"/><circle cx="17" cy="16" r="1.6" fill="var(--surface)"/><circle cx="22" cy="16" r="1.6" fill="var(--surface)"/><rect x="3" y="13" width="5" height="6" rx="2" fill="var(--ink)"/></svg><span class="brand-long">Penny Whistle Tabs</span><span class="brand-short">Whistle Tabs</span></a>
-    <nav><a class="btn nav-library ${active === 'library' ? 'primary' : ''}" href="./">Library</a><a class="btn ${active === 'new' ? 'primary' : ''}" href="editor.html"><span class="brand-long">+ New tab</span><span class="brand-short">+ New</span></a>${themeButton()}<details class="more account" id="account" hidden>
+    <nav><a class="btn nav-library ${active === 'library' ? 'primary' : ''}" href="./">Library</a>${themeButton()}<details class="more account" id="account" hidden>
       <summary class="btn" aria-label="Account"></summary>
-      <div class="menu"><div class="who"></div><button class="btn" id="sign-out" type="button">Sign out</button></div>
+      <div class="menu"><div class="who"></div><a class="btn" id="friends-link" href="friends.html">Friends</a><button class="btn" id="sign-out" type="button">Sign out</button></div>
     </details></nav>
   </header>`;
 }
 // topbar() is called synchronously by each page right after import, so the slot exists by the next tick.
 setTimeout(showUser);
 
+/** API route of a tune: your own, or a friend's (read-only, tune.owner is set). */
+export const tuneRoute = (id, owner) => (owner ? `friends/${owner}/tunes/${id}` : `tunes/${id}`);
+
+/** Link to a tune's page; owner is the friend's account id for a friend's tune. */
+export const tuneHref = (id, owner) => `tune.html?id=${encodeURIComponent(id)}${owner ? `&owner=${encodeURIComponent(owner)}` : ''}`;
+
 export function originalSources(tune) {
-  return (tune.originals || []).map((o) => ({ url: apiUrl(`tunes/${tune.id}/files/${o.file}`), type: o.type, name: o.originalName }));
+  const base = tuneRoute(tune.id, tune.owner?.sub);
+  return (tune.originals || []).map((o) => ({ url: apiUrl(`${base}/files/${o.file}`), type: o.type, name: o.originalName }));
 }

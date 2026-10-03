@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Friends · Penny Whistle Tabs</title>
+<script>try{if(localStorage.getItem('pw-theme')==='dark')document.documentElement.dataset.theme='dark'}catch(e){}</script>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="top"></div>
+<main class="friends-page">
+  <h1>Friends</h1>
+  <p class="muted">Friends can see each other’s tunes in their library. They can’t change or delete them.</p>
+
+  <section class="card stack">
+    <h2>Add a friend</h2>
+    <form class="add-friend" id="add">
+      <input type="email" id="email" placeholder="friend@example.com" aria-label="Friend’s email address" autocomplete="email" required>
+      <button class="btn primary" type="submit">Send request</button>
+    </form>
+    <div id="add-status" class="status small" aria-live="polite"></div>
+  </section>
+
+  <section class="card stack" id="incoming-card" hidden>
+    <h2>Friend requests</h2>
+    <ul class="person-list" id="incoming"></ul>
+  </section>
+
+  <section class="card stack">
+    <h2>Your friends</h2>
+    <ul class="person-list" id="friends"></ul>
+  </section>
+
+  <section class="card stack" id="sent-card" hidden>
+    <h2>Waiting for an answer</h2>
+    <ul class="person-list" id="sent"></ul>
+  </section>
+</main>
+<script type="module">
+import { $, api, esc, errorHTML, topbar } from './js/ui.js';
+$('#top').innerHTML = topbar();
+
+const avatar = (p) => (p.picture
+  ? `<img class="avatar" src="${esc(p.picture)}" alt="" referrerpolicy="no-referrer" width="36" height="36">`
+  : `<span class="avatar">${esc((p.name || p.email || '?').trim().charAt(0).toUpperCase())}</span>`);
+const who = (p) => `<div class="who"><strong>${esc(p.name || p.email)}</strong>${p.name && p.name !== p.email ? `<span class="muted small">${esc(p.email)}</span>` : ''}</div>`;
+const when = (iso) => new Date(iso).toLocaleDateString();
+
+function draw({ friends, incoming, sent }) {
+  $('#incoming-card').hidden = !incoming.length;
+  if (!incoming.length) document.querySelectorAll('#account .dot, #friends-link .badge').forEach((el) => el.remove());
+  $('#incoming').innerHTML = incoming.map((p) => `<li class="person">${avatar(p)}${who(p)}
+    <div class="acts"><button class="btn primary" data-act="accept" data-sub="${esc(p.sub)}">Accept</button><button class="btn" data-act="ignore" data-sub="${esc(p.sub)}">Ignore</button></div></li>`).join('');
+  $('#friends').innerHTML = friends.map((p) => `<li class="person">${avatar(p)}${who(p)}
+    <div class="acts"><button class="btn danger" data-act="remove" data-sub="${esc(p.sub)}" data-name="${esc(p.name || p.email)}">Remove</button></div></li>`).join('')
+    || '<li class="muted">No friends yet. Add someone by their email address above.</li>';
+  $('#sent-card').hidden = !sent.length;
+  $('#sent').innerHTML = sent.map((s) => `<li class="person"><div class="who"><strong>${esc(s.email)}</strong><span class="muted small">Asked ${when(s.at)}</span></div>
+    <div class="acts"><button class="btn" data-act="cancel" data-email="${esc(s.email)}">Cancel</button></div></li>`).join('');
+}
+
+const post = (route, body) => api(route, { method: 'POST', body: JSON.stringify(body) });
+
+const MESSAGES = {
+  sent: (e) => `Friend request sent to ${e}.`,
+  'sent-no-email': (e) => `Friend request saved, but the email to ${e} could not be sent. They’ll see it on this page when they sign in.`,
+  'already-sent': (e) => `You’ve already asked ${e}. They’ll see the request when they sign in.`,
+  friends: (e) => `${e} had already asked you, so you’re now friends.`,
+};
+
+$('#add').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const email = $('#email').value.trim();
+  const btn = $('#add button');
+  btn.disabled = true;
+  $('#add-status').innerHTML = '<span class="spinner"></span> Sending…';
+  try {
+    const res = await post('friends/request', { email });
+    draw(res);
+    $('#add-status').textContent = MESSAGES[res.status]?.(email) ?? 'Done.';
+    $('#email').value = '';
+  } catch (e) {
+    $('#add-status').innerHTML = errorHTML(e);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('button[data-act]');
+  if (!btn) return;
+  const { act, sub, email, name } = btn.dataset;
+  if (act === 'remove' && !confirm(`Remove ${name} from your friends? You will no longer see each other’s tunes.`)) return;
+  btn.disabled = true;
+  try {
+    draw(await post(`friends/${act}`, act === 'cancel' ? { email } : { sub }));
+  } catch (e) {
+    btn.disabled = false;
+    alert(e.message);
+  }
+});
+
+try { draw(await api('friends')); }
+catch (e) { $('#friends').innerHTML = `<li>${errorHTML(e, 'Could not load your friends')}</li>`; }
+</script>
+</body>
+</html>

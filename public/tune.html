@@ -39,6 +39,7 @@
         <div class="controls">
           <button class="player-toggle" type="button" aria-expanded="true" aria-label="Hide player" title="Hide player"><span class="when-open" aria-hidden="true">‹</span><span class="when-closed" aria-hidden="true">♪</span></button>
           <button class="btn" id="play" type="button">▶ Play</button>
+          <button class="btn mute-toggle" type="button" aria-pressed="false" aria-label="Mute"></button>
           <button class="btn settings-toggle" type="button" aria-expanded="false" aria-label="Player settings">⚙</button>
           <div class="settings">
             <label for="tempo">Tempo</label><input type="range" id="tempo" min="30" max="220" value="90"><span id="tempo-v" class="small">90</span>
@@ -63,10 +64,12 @@
 import { buildDisplayAbc } from './js/core.js';
 import { TabView, Player, tone, defaultBpm } from './js/render.js';
 import { renderPages, showPages } from './js/originals.js';
-import { $, api, esc, topbar, renderNow, renderChordList, originalSources, tabStyleControl, errorHTML, loginUrl } from './js/ui.js';
+import { $, api, esc, topbar, renderNow, renderChordList, originalSources, tabStyleControl, errorHTML, loginUrl, tuneRoute, isMuted } from './js/ui.js';
 
 $('#top').innerHTML = topbar();
-const id = new URLSearchParams(location.search).get('id');
+const params = new URLSearchParams(location.search);
+const id = params.get('id');
+const owner = params.get('owner'); // set for a friend's tune, which is read-only
 
 const view = new TabView($('#tab'), {
   onSelect: (item, i, ctx) => {
@@ -94,11 +97,12 @@ async function setOriginal(show) {
 }
 
 try {
-  tune = await api(`tunes/${id}`);
+  tune = await api(tuneRoute(id, owner));
   document.title = tune.title;
   $('#title').textContent = tune.title;
   const t = tune.tab || {};
   $('#meta').innerHTML = [
+    tune.owner && `<span class="badge accent">From ${esc(tune.owner.name || tune.owner.email)}’s library</span>`,
     tune.composer && `<span class="badge">${esc(tune.composer)}</span>`,
     t.key && `<span class="badge accent">Key ${esc(t.key)}</span>`,
     t.meter && `<span class="badge">${esc(t.meter)}</span>`,
@@ -106,6 +110,7 @@ try {
     `<span class="badge">approved ${new Date(tune.updatedAt).toLocaleDateString()}</span>`,
   ].filter(Boolean).join('');
   $('#edit').href = `editor.html?id=${encodeURIComponent(tune.id)}`;
+  if (tune.owner) $('#edit').hidden = $('#delete').hidden = true;
   $('#json').href = URL.createObjectURL(new Blob([JSON.stringify(tune, null, 2)], { type: 'application/json' }));
   $('#json').download = `${tune.id}.json`;
 
@@ -145,11 +150,12 @@ try {
 }
 
 $('#tempo').addEventListener('input', () => { $('#tempo-v').textContent = $('#tempo').value; });
-$('#play').addEventListener('click', () => {
-  if (player.playing) { player.stop(); return; }
-  player.play(Number($('#tempo').value), view.selected);
+function startPlay() {
+  player.play(Number($('#tempo').value), view.selected, { muted: isMuted() });
   $('#play').textContent = '■ Stop';
-});
+}
+$('#play').addEventListener('click', () => (player.playing ? player.stop() : startPlay()));
+document.addEventListener('pw-mute', () => { if (player.playing) startPlay(); }); // carry on from the current note
 $('#print').addEventListener('click', () => window.print());
 $('#delete').addEventListener('click', async () => {
   if (!confirm(`Delete “${tune.title}” and its original files from the library?`)) return;

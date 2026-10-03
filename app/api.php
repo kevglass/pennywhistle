@@ -15,6 +15,8 @@ const PROJECT_ROOT = __DIR__ . '/..';
 
 require PROJECT_ROOT . '/vendor/autoload.php';
 require __DIR__ . '/claude.php';
+require __DIR__ . '/omr/musescore.php';
+require __DIR__ . '/friends.php';
 
 // ------------------------------------------------------------------ config
 
@@ -96,10 +98,10 @@ function write_json_atomic(string $file, array $data): void
     rename($tmp, $file);
 }
 
-function load_tune(string $id): ?array
+function load_tune(string $tunesDir, string $id): ?array
 {
     if (!valid_id($id)) return null;
-    $file = TUNES_DIR . "/$id/tune.json";
+    $file = "$tunesDir/$id/tune.json";
     if (!is_file($file)) return null;
     $t = json_decode((string) file_get_contents($file), true);
     return is_array($t) ? $t : null;
@@ -114,6 +116,33 @@ function summary(array $t): array
         'transpose' => $t['settings']['transpose'] ?? 0, 'hasOriginal' => !empty($t['originals']),
         'createdAt' => $t['createdAt'], 'updatedAt' => $t['updatedAt'],
     ];
+}
+
+/** Summaries of every tune in a library folder, newest first. */
+function list_tunes(string $tunesDir): array
+{
+    $out = [];
+    foreach (glob("$tunesDir/*/tune.json") ?: [] as $file) {
+        $t = load_tune($tunesDir, basename(dirname($file)));
+        if ($t) $out[] = summary($t);
+    }
+    usort($out, fn ($a, $b) => strcmp((string) $b['updatedAt'], (string) $a['updatedAt']));
+    return $out;
+}
+
+/** Send one of a tune's uploaded original files. */
+function serve_original(string $dir, array $tune, string $name): never
+{
+    foreach ($tune['originals'] ?? [] as $o) {
+        if ($o['file'] === $name && is_file("$dir/{$o['file']}")) {
+            header('Content-Type: ' . $o['type']);
+            header('Content-Length: ' . filesize("$dir/{$o['file']}"));
+            header('Cache-Control: private, max-age=3600');
+            readfile("$dir/{$o['file']}");
+            exit;
+        }
+    }
+    send_json(404, ['error' => 'File not found']);
 }
 
 /** Save uploaded original files (multipart field originals[]) into the tune folder. */
@@ -186,10 +215,35 @@ function meta_from_request(): array
 // ------------------------------------------------------------------ transcription
 
 
+/**
+ * A single uploaded PDF exported from MuseScore 4 is read straight from its drawing commands
+ * (app/omr/musescore.php): exact, instant and free. Returns null for anything else.
+ */
+function read_musescore_pdf(array $body): ?array
+{
+    $pdfs = is_array($body['pdfs'] ?? null) ? $body['pdfs'] : [];
+    if (count($pdfs) !== 1 || (int) ($body['sourceCount'] ?? 1) !== 1) return null;
+    $data = base64_decode((string) ($pdfs[0]['data'] ?? ''), true);
+    if ($data === false || $data === '' || strlen($data) > 40 * 1024 * 1024) return null;
+    try {
+        return musescore_to_abc($data, pathinfo((string) ($pdfs[0]['name'] ?? ''), PATHINFO_FILENAME));
+    } catch (Throwable $e) {
+        error_log('musescore reader: ' . $e->getMessage());
+        return null;
+    }
+}
+
 function transcribe(): never
 {
-    if (!has_key()) send_json(503, ['error' => 'Transcription is not configured: set ANTHROPIC_API_KEY in the server .env file.']);
     $body = read_json_body();
+    $score = read_musescore_pdf($body);
+    if ($score !== null) {
+        header('Content-Type: application/x-ndjson; charset=utf-8');
+        header('Cache-Control: no-store');
+        echo json_encode(['type' => 'done', 'abc' => $score['abc'], 'model' => 'musescore-pdf', 'truncated' => false, 'warnings' => $score['warnings']], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), "\n";
+        exit;
+    }
+    if (!has_key()) send_json(503, ['error' => 'Only PDFs exported from MuseScore can be read on this server. Reading other music needs Claude: set ANTHROPIC_API_KEY in the server .env file.']);
     $pages = array_slice(is_array($body['pages'] ?? null) ? $body['pages'] : [], 0, 40);
     $content = transcription_content($pages, (string) ($body['hint'] ?? ''));
     if (!$content) send_json(400, ['error' => 'No usable page images']);
@@ -403,22 +457,15 @@ function handle(): never
 
     $user = current_user();
     if (!$user) send_json(401, ['error' => 'Please sign in', 'login' => true]);
-    if ($route === 'auth/me' && $method === 'GET') send_json(200, $user);
+    if ($route === 'auth/me' && $method === 'GET') send_json(200, $user + ['friendRequests' => friend_request_count($user)]);
     if ($route === 'transcribe' && $method === 'POST') transcribe();
+    if (in_array($parts[0] ?? '', ['friends', 'library'], true)) handle_friends($user, $parts, $method);
     if (($parts[0] ?? '') !== 'tunes') send_json(404, ['error' => 'Not found']);
     define('TUNES_DIR', user_dir($user['sub']) . '/tunes');
     ensure_dir(TUNES_DIR);
     $id = $parts[1] ?? null;
 
-    if ($id === null && $method === 'GET') {
-        $out = [];
-        foreach (glob(TUNES_DIR . '/*/tune.json') ?: [] as $file) {
-            $t = load_tune(basename(dirname($file)));
-            if ($t) $out[] = summary($t);
-        }
-        usort($out, fn ($a, $b) => strcmp((string) $b['updatedAt'], (string) $a['updatedAt']));
-        send_json(200, $out);
-    }
+    if ($id === null && $method === 'GET') send_json(200, list_tunes(TUNES_DIR));
 
     if ($id === null && $method === 'POST') {
         $meta = meta_from_request();
@@ -432,23 +479,12 @@ function handle(): never
         send_json(201, $rec);
     }
 
-    $existing = $id !== null ? load_tune($id) : null;
+    $existing = $id !== null ? load_tune(TUNES_DIR, $id) : null;
     if (!$existing) send_json(404, ['error' => 'Tune not found']);
     $dir = TUNES_DIR . '/' . $existing['id'];
     $action = $parts[2] ?? '';
 
-    if ($action === 'files' && isset($parts[3]) && $method === 'GET') {
-        foreach ($existing['originals'] as $o) {
-            if ($o['file'] === $parts[3] && is_file("$dir/{$o['file']}")) {
-                header('Content-Type: ' . $o['type']);
-                header('Content-Length: ' . filesize("$dir/{$o['file']}"));
-                header('Cache-Control: private, max-age=3600');
-                readfile("$dir/{$o['file']}");
-                exit;
-            }
-        }
-        send_json(404, ['error' => 'File not found']);
-    }
+    if ($action === 'files' && isset($parts[3]) && $method === 'GET') serve_original($dir, $existing, $parts[3]);
     if ($action === '' && $method === 'GET') send_json(200, $existing);
     if ($action === '' && $method === 'POST') { // update (POST for compatibility with simple hosts)
         $meta = meta_from_request();

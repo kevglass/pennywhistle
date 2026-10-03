@@ -233,7 +233,9 @@ export class TabView {
       cell.classList.add('active');
       if (scroll) {
         const rc = cell.getBoundingClientRect();
-        if (rc.top < 80 || rc.bottom > window.innerHeight - 40) cell.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        const bar = document.querySelector('body.has-player .player:not(.collapsed)'); // fixed over the top of the page
+        const top = (bar ? bar.getBoundingClientRect().bottom : 0) + 30;
+        if (rc.top < top || rc.bottom > window.innerHeight - 40) cell.scrollIntoView({ block: 'center', behavior: 'smooth' });
       }
     }
     if (!quiet) this.onSelect(r.item, i, { chord: this.chordAt[i], source, measure: this.data.measures[r.measureIndex] });
@@ -527,8 +529,8 @@ export class Player {
     this.playing = false;
   }
 
-  /** bpm counts the tune's beat unit (from Q: or the meter). */
-  play(bpm, fromItem = -1) {
+  /** bpm counts the tune's beat unit (from Q: or the meter). Muted: no sound, the notes still highlight and scroll in time. */
+  play(bpm, fromItem = -1, { muted = false } = {}) {
     this.stop();
     const v = this.view;
     if (!v.items.length) return;
@@ -540,19 +542,18 @@ export class Player {
       const at = order.indexOf(fromItem);
       if (at > 0) order = order.slice(at);
     }
-    if (!samplesReady) { // first play: wait for the samples, then start
+    if (!muted && !samplesReady) { // first play: wait for the samples, then start
       this.playing = true;
-      loadSamples().then(() => { if (this.playing) { this.playing = false; this.play(bpm, fromItem); } });
+      loadSamples().then(() => { if (this.playing) { this.playing = false; this.play(bpm, fromItem, { muted }); } });
       return;
     }
-    const a = audio();
-    let t = a.currentTime + 0.12;
+    let t = (muted ? 0 : audio().currentTime) + 0.12;
     const t0 = t;
     this.playing = true;
     order.forEach((idx, k) => {
       const it = v.items[idx];
       const dur = (it.beats / den) * wholeSec;
-      if (it.type === 'note') {
+      if (it.type === 'note' && !muted) {
         // extend through following tied "hold" items
         let sound = dur;
         let j = k + 1;

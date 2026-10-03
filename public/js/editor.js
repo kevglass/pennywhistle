@@ -1,9 +1,9 @@
 import { analyzeTune, buildDisplayAbc, bestTranspose, whistleStats, cleanAbc, tabDocument, transposedKeyName } from './core.js';
 import { TabView, Player, tone, defaultBpm } from './render.js';
 import { renderPages, pagesToImages, showPages, ACCEPTED } from './originals.js';
-import { $, api, apiUrl, apiError, errorHTML, esc, topbar, renderNow, originalSources, tabStyleControl } from './ui.js';
+import { $, api, apiUrl, apiError, errorHTML, esc, topbar, renderNow, originalSources, tabStyleControl, isMuted } from './ui.js';
 
-$('#top').innerHTML = topbar('new');
+$('#top').innerHTML = topbar();
 
 const EXAMPLES = [
   `X:1
@@ -35,6 +35,7 @@ const params = new URLSearchParams(location.search);
 const editId = params.get('id');
 let existing = null;
 let pages = []; // rendered canvases of the current original music
+let originalFiles = []; // the files those pages came from (File, or {url, type} for a saved tune)
 let lastDisplay = '';
 let lastGenerated = false;
 let srcData = null;
@@ -50,6 +51,34 @@ const view = new TabView($('#preview'), {
 const player = new Player(view, { onStop: () => { $('#play').textContent = '▶ Play'; } });
 renderNow($('#now'), null);
 tabStyleControl($('#style'), () => { if (lastDisplay) view.render(lastDisplay); });
+
+// ------------------------------------------------------------ steps
+// Three blocks (upload, convert, tab). Only one is open at a time; a block can
+// be reopened once the flow has reached it.
+const STEPS = ['#step-upload', '#step-convert', '#step-review'];
+let reached = 1;
+
+function openStep(n, { scroll = true } = {}) {
+  reached = Math.max(reached, n);
+  STEPS.forEach((sel, i) => {
+    const el = $(sel);
+    const num = i + 1;
+    const open = num === n;
+    el.classList.toggle('open', open);
+    el.classList.toggle('done', num < reached && !open);
+    el.querySelector('.step-head').disabled = num > reached;
+    el.querySelector('.step-head').setAttribute('aria-expanded', String(open));
+    el.querySelector('.step-body').hidden = !open;
+  });
+  // The player bar is fixed to the top of the page, so only show it with the tab.
+  document.body.classList.toggle('has-player', n === 3);
+  if (n === 3) update(); // lay the tab out now that it has a width
+  if (scroll) $(STEPS[n - 1]).scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+STEPS.forEach((sel, i) => $(sel).querySelector('.step-head').addEventListener('click', () => openStep(i + 1)));
+
+function summary(step, html) { $(`#sum-${step}`).innerHTML = html; }
+openStep(1, { scroll: false });
 
 // ------------------------------------------------------------ settings
 
@@ -80,7 +109,7 @@ function update() {
   const src = $('#abc').value;
   $('#abc-error').textContent = '';
   if (!/^K:/m.test(src)) {
-    $('#preview').innerHTML = '<div class="tabview"><p class="muted" style="padding:20px">The tab will appear here once the music has been read (or you enter ABC notation below).</p></div>';
+    $('#preview').innerHTML = '<div class="tabview"><p class="muted" style="padding:20px">The tab will appear here once the music has been processed.</p></div>';
     $('#stats').innerHTML = '';
     $('#save').disabled = true;
     srcData = null;
@@ -99,14 +128,13 @@ function update() {
     const r = view.render(lastDisplay);
     if (!r) throw new Error('No music found in the notation.');
     drawStats();
-    if (tune.warnings && tune.warnings.length) $('#abc-error').innerHTML = tune.warnings.slice(0, 5).map((w) => esc(String(w).replace(/<[^>]+>/g, ''))).join('<br>');
     $('#save').disabled = false;
     if (!$('#tempo').dataset.touched) {
       $('#tempo').value = defaultBpm(view.visual);
       $('#tempo-v').textContent = $('#tempo').value;
     }
   } catch (e) {
-    $('#abc-error').textContent = 'Could not read the notation: ' + e.message;
+    $('#abc-error').textContent = 'Could not build the tab from this music: ' + e.message + '. Try processing it again.';
     $('#save').disabled = true;
   }
 }
@@ -161,11 +189,12 @@ window.addEventListener('resize', () => {
 
 // playback
 $('#tempo').addEventListener('input', () => { $('#tempo').dataset.touched = '1'; $('#tempo-v').textContent = $('#tempo').value; });
-$('#play').addEventListener('click', () => {
-  if (player.playing) { player.stop(); return; }
-  player.play(Number($('#tempo').value), view.selected);
+function startPlay() {
+  player.play(Number($('#tempo').value), view.selected, { muted: isMuted() });
   $('#play').textContent = '■ Stop';
-});
+}
+$('#play').addEventListener('click', () => (player.playing ? player.stop() : startPlay()));
+document.addEventListener('pw-mute', () => { if (player.playing) startPlay(); }); // carry on from the current note
 document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, textarea, select')) return;
   if (e.key === 'ArrowRight') { view.step(1); e.preventDefault(); }
@@ -186,28 +215,38 @@ function setOriginalVisible(v) {
 }
 $('#toggle-original').addEventListener('click', () => setOriginalVisible(!showOriginal));
 
-async function loadPages(sources) {
-  $('#status').innerHTML = '<span class="spinner"></span> Loading pages…';
+async function loadPages(sources, label) {
+  $('#upload-status').innerHTML = '<span class="spinner"></span> Loading pages…';
   try {
     pages = await renderPages(sources);
+    originalFiles = sources;
     showPages($('#original'), pages);
     // thumbnails share the same canvases' images
     $('#thumbs').innerHTML = pages.map((p) => `<figure class="page"><img alt="${esc(p.label)}" src="${p.canvas.toDataURL('image/jpeg', 0.6)}"><figcaption>${esc(p.label)}</figcaption></figure>`).join('');
-    $('#status').textContent = `${pages.length} page${pages.length === 1 ? '' : 's'} ready.`;
-    $('#read').disabled = !pages.length || !window.__canTranscribe;
+    $('#upload-status').textContent = `${pages.length} page${pages.length === 1 ? '' : 's'}. Choose another file to replace ${pages.length === 1 ? 'it' : 'them'}.`;
+    $('#read').disabled = !pages.length || !(window.__canTranscribe || singlePdf());
     setOriginalVisible(false);
+    if (label) {
+      summary('upload', esc(label));
+      summary('convert', '');
+      $('#status').innerHTML = '';
+      openStep(2);
+    }
   } catch (e) {
-    $('#status').innerHTML = `<span class="error">Could not open that file: ${esc(e.message)}</span>`;
+    $('#upload-status').innerHTML = `<span class="error">Could not open that file: ${esc(e.message)}</span>`;
   }
 }
 
 function chooseFiles(list) {
   const chosen = [...list];
   const bad = chosen.filter((f) => !ACCEPTED.includes(f.type));
-  if (bad.length) $('#status').innerHTML = `<span class="error">Skipped unsupported file(s): ${bad.map((f) => esc(f.name)).join(', ')}. Use PDF, PNG, JPG or WebP.</span>`;
+  if (bad.length) $('#upload-status').innerHTML = `<span class="error">Skipped unsupported file(s): ${bad.map((f) => esc(f.name)).join(', ')}. Use PDF, PNG, JPG or WebP.</span>`;
   // The pages are only needed while transcribing; they aren't saved with the tune.
   const accepted = chosen.filter((f) => ACCEPTED.includes(f.type));
-  if (accepted.length) loadPages(accepted);
+  if (!accepted.length) return;
+  const label = accepted[0].type === 'application/pdf' ? 'PDF uploaded'
+    : accepted.length === 1 ? 'Image uploaded' : `${accepted.length} images uploaded`;
+  loadPages(accepted, label);
 }
 const drop = $('#drop');
 drop.addEventListener('click', () => $('#file').click());
@@ -222,28 +261,39 @@ $('#example').addEventListener('click', () => {
   $('#abc').value = ex;
   $('#title').value = '';
   $('#transpose').value = '0';
-  $('#step-review details').open = true;
-  update();
-  $('#step-review').scrollIntoView({ behavior: 'smooth' });
+  summary('convert', 'Example tune');
+  openStep(3);
 });
 
 // ------------------------------------------------------------ transcription
+
+// A single PDF is also sent as-is: if MuseScore made it, the server reads the notes straight
+// from the PDF (no AI); otherwise Claude reads the page images.
+const singlePdf = () => originalFiles.length === 1 && originalFiles[0].type === 'application/pdf';
+
+async function pdfPayload() {
+  if (!singlePdf()) return [];
+  const src = originalFiles[0];
+  const buf = new Uint8Array(src.url ? await (await fetch(src.url)).arrayBuffer() : await src.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  return [{ name: src.name || 'music.pdf', data: btoa(bin) }];
+}
 
 $('#read').addEventListener('click', async () => {
   if (!pages.length) return;
   const btn = $('#read');
   btn.disabled = true;
   const started = Date.now();
-  let statusText = 'Sending pages to Claude…';
+  let statusText = 'Reading the music…';
   const tick = () => { $('#status').innerHTML = `<span class="spinner"></span> ${esc(statusText)} <span class="muted">${Math.round((Date.now() - started) / 1000)}s</span>`; };
   tick();
   const clock = setInterval(tick, 1000);
-  let text = '';
   try {
     const res = await fetch(apiUrl('transcribe'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pages: pagesToImages(pages), hint: $('#hint').value }),
+      body: JSON.stringify({ pages: pagesToImages(pages), pdfs: await pdfPayload(), sourceCount: originalFiles.length, hint: $('#hint').value }),
     });
     if (!res.ok) throw apiError(res, await res.json().catch(() => ({})));
     const reader = res.body.getReader();
@@ -261,7 +311,6 @@ $('#read').addEventListener('click', async () => {
         if (!line) continue;
         const ev = JSON.parse(line);
         if (ev.type === 'status') statusText = ev.text;
-        if (ev.type === 'delta') { text += ev.text; $('#abc').value = text; $('#step-review details').open = true; }
         if (ev.type === 'error') throw new Error(ev.message);
         if (ev.type === 'done') done = ev;
       }
@@ -271,10 +320,15 @@ $('#read').addEventListener('click', async () => {
     transcription = { model: done.model, at: new Date().toISOString() };
     $('#title').value = '';
     $('#transpose').value = '0';
-    update();
     const secs = Math.round((Date.now() - started) / 1000);
-    $('#status').innerHTML = `Done in ${secs}s.${done.truncated ? ' <span class="error">The output was cut short; check the last bars.</span>' : ''} Compare the tab with the original, fix anything in the notation box, then approve.`;
-    $('#step-review').scrollIntoView({ behavior: 'smooth' });
+    $('#status').innerHTML = done.model === 'musescore-pdf'
+      ? 'Read straight from the MuseScore PDF (no AI needed).'
+        + (done.warnings?.length ? ` <span class="error">${esc(done.warnings.join(' '))}</span>` : '')
+      : `Done in ${secs}s. Process it again to get a fresh reading.`;
+    summary('convert', 'Music processed');
+    $('#review-hint').innerHTML = (done.truncated ? '<span class="error">The output was cut short; check the last bars.</span> ' : '')
+      + 'Compare the tab with the original, pick a key and chords, then approve.';
+    openStep(3);
   } catch (e) {
     $('#status').innerHTML = errorHTML(e, '', { newTab: true });
   } finally {
@@ -322,8 +376,8 @@ $('#save').addEventListener('click', async () => {
     const cfg = await api('config');
     window.__canTranscribe = cfg.transcribe;
     if (!cfg.transcribe) {
-      $('#read').title = 'Set ANTHROPIC_API_KEY on the server to enable reading music';
-      $('#status').innerHTML = '<span class="muted">Reading music with Claude is not configured on this server (ANTHROPIC_API_KEY). You can still enter ABC notation by hand.</span>';
+      $('#read').title = 'Only PDFs exported from MuseScore can be read without ANTHROPIC_API_KEY on the server';
+      $('#status').innerHTML = '<span class="muted">Reading music with Claude is not configured on this server (ANTHROPIC_API_KEY). PDFs exported from MuseScore can still be read.</span>';
     }
   } catch { window.__canTranscribe = false; }
 
@@ -337,9 +391,11 @@ $('#save').addEventListener('click', async () => {
       $('#title').value = existing.title;
       $('#chords').value = existing.settings?.chordMode || 'auto';
       transcription = existing.transcription || null;
+      summary('upload', existing.originals?.length ? 'Original pages' : 'No original pages kept');
+      summary('convert', 'Saved notation');
       update();
       $('#transpose').value = existing.settings?.transpose || 0;
-      update();
+      openStep(3, { scroll: false });
       if (existing.originals?.length) await loadPages(originalSources(existing));
     } catch (e) {
       $('#status').innerHTML = errorHTML(e, 'Could not load that tune');
