@@ -639,12 +639,18 @@ function pluck(sr, midi, decay = 0.996, tone = 0.5) {
   return d;
 }
 
-/** Times (from 0, before `span`), directions and loudness of each stroke in an instrument's pattern; beat in seconds. */
-function strokes(pattern, span, beat) {
-  const every = Math.max(0.11, { strum: Infinity, beat, downup: beat / 2, roll: beat / 2 }[pattern] ?? Infinity); // seconds: no faster than hands can go, e.g. in 6/8
+/**
+ * Times (from 0, before `span`), directions and loudness of each stroke in an instrument's pattern.
+ * beat: the felt beat in seconds (the one the tempo counts: a dotted quarter in 6/8 or 12/8), which
+ * splits into 2 (simple time) or 3 (compound time, giving a jig's down-up-down), so strumming goes
+ * at the same pace whatever note the meter counts in.
+ */
+function strokes(pattern, span, { beat, split }) {
+  let every = { strum: Infinity, beat, downup: beat / split, roll: beat / split }[pattern] ?? Infinity;
+  if (every < 0.14) every = beat; // faster than hands can go: one stroke a beat
   const out = [];
   for (let t = 0, k = 0; t < span - 0.02 && (k === 0 || every !== Infinity); t += every, k++) {
-    const up = pattern !== 'beat' && k % 2 === 1;
+    const up = pattern !== 'beat' && every < beat && (k % split) % 2 === 1;
     out.push({ t, k, up, level: up ? 0.55 : 1 });
   }
   return out;
@@ -669,10 +675,10 @@ function picks(inst, frets, span, beat) {
   return out;
 }
 
-const chordMixes = new Map(); // `${sampleRate}:${instrument}:${chord}:${span}:${beat}` -> AudioBuffer
+const chordMixes = new Map(); // `${sampleRate}:${instrument}:${chord}:${span}:${beat}:${split}` -> AudioBuffer
 /** The chord played for `span` seconds in the instrument's style, mixed into one buffer (then damped). */
 function chordMix(a, instrument, name, span, beat) {
-  const key = `${a.sampleRate}:${instrument}:${name}:${span.toFixed(3)}:${beat.toFixed(4)}`;
+  const key = `${a.sampleRate}:${instrument}:${name}:${span.toFixed(3)}:${beat.beat.toFixed(4)}:${beat.split}`;
   if (chordMixes.has(key)) return chordMixes.get(key);
   const frets = chordFrets(name, instrument);
   if (!frets) return null;
@@ -707,7 +713,7 @@ function chordMix(a, instrument, name, span, beat) {
 
 /**
  * Play a chord from t0 until `end` in the instrument's style (a strum, strums on the beat, down-up
- * strumming, a banjo roll); beat is a beat's length in seconds. False when the chord has no known shape.
+ * strumming, a banjo roll); beat is { beat: seconds, split } (see strokes). False when the chord has no known shape.
  */
 function strum(a, name, t0, end, beat, instrument = getChordInstrument(), level = 0.055) {
   const buf = chordMix(a, instrument, name, end - t0, beat);
@@ -742,7 +748,8 @@ function schedule(a, v, bpm, order, t, { sound = true, chords = false, instrumen
   const wholeSec = (60 / bpm) / beatLen;
   const den = v.data.meter.den;
   const strums = []; // { t, chord }; chord null where the chords stop
-  const beat = wholeSec / den;
+  // the felt beat the tempo counts, split in 3 in compound time (6/8, 9/8, 12/8) and in 2 otherwise
+  const beat = { beat: beatLen * wholeSec, split: Math.abs(beatLen * den - 3) < 0.01 ? 3 : 2 };
   order.forEach((idx, k) => {
     const it = v.items[idx];
     const dur = (it.beats / den) * wholeSec;
