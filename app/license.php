@@ -144,3 +144,58 @@ function check_license(Client $client, string $model, string $effort, array $tun
         'model' => $message->model ?: $model,
     ];
 }
+
+// ------------------------------------------------------------------ the same piece in other libraries
+
+/** A title or composer reduced to its words, for comparing: "The Kesh (Jig)" → "kesh jig". */
+function piece_words(string $s): string
+{
+    $s = strtolower(iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $s) ?: $s);
+    $s = trim((string) preg_replace('/[^a-z0-9]+/', ' ', $s));
+    return (string) preg_replace('/^the /', '', $s);
+}
+
+/** Semitone steps between the first notes of the tab: the same in any key, so transposed copies still match. */
+function opening_steps(array $tune, int $notes = 16): array
+{
+    $midi = [];
+    foreach ($tune['tab']['measures'] ?? [] as $m) {
+        foreach ($m['items'] ?? [] as $it) {
+            if (($it['type'] ?? '') === 'note' && isset($it['midi'])) $midi[] = (int) $it['midi'];
+            if (count($midi) >= $notes) break 2;
+        }
+    }
+    $steps = [];
+    for ($i = 1; $i < count($midi); $i++) $steps[] = $midi[$i] - $midi[$i - 1];
+    return $steps;
+}
+
+/** Whether two openings agree on most steps, allowing a couple of pickup notes on either one. */
+function similar_openings(array $a, array $b): bool
+{
+    for ($shift = -2; $shift <= 2; $shift++) {
+        $same = $total = 0;
+        for ($i = max(0, -$shift); $i < count($a) && $i + $shift < count($b); $i++) {
+            $total++;
+            if ($a[$i] === $b[$i + $shift]) $same++;
+        }
+        if ($total >= 8 && $same >= 0.75 * $total) return true;
+    }
+    return false;
+}
+
+/**
+ * Whether two saved tunes are the same piece of music: the same title, no conflicting composer,
+ * and (when both have a tab) the same opening melody, since different tunes often share a title.
+ */
+function same_piece(array $a, array $b): bool
+{
+    $title = piece_words((string) ($a['title'] ?? ''));
+    if ($title === '' || $title !== piece_words((string) ($b['title'] ?? ''))) return false;
+    $ca = piece_words((string) ($a['composer'] ?? ''));
+    $cb = piece_words((string) ($b['composer'] ?? ''));
+    if ($ca !== '' && $cb !== '' && $ca !== $cb) return false;
+    $sa = opening_steps($a);
+    $sb = opening_steps($b);
+    return !$sa || !$sb || similar_openings($sa, $sb);
+}

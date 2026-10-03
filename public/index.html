@@ -102,7 +102,7 @@ $('#list').addEventListener('click', async (e) => {
     const { id, owner } = badge.closest('td').dataset;
     const t = findTune(id, owner);
     if (!t) return;
-    const onCheck = canCheck ? async () => { t.license = await checkLicense(t.id, owner); draw(); return t.license; } : undefined;
+    const onCheck = canCheck ? async () => { t.license = await checkLicense(t.id, owner, { again: true }); draw(); return t.license; } : undefined;
     showLicenseDialog(t.title, t.license, { onCheck });
     return;
   }

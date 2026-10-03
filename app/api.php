@@ -318,11 +318,36 @@ function transcribe(): never
 
 // ------------------------------------------------------------------ license check
 
-/** Research the tune's license with Claude and web search, and save it in tune.json (noting who asked). */
+/** Every saved tune in every library that is the same piece as $tune (by file path, tune.json). */
+function copies_of_piece(array $tune): array
+{
+    $out = [];
+    foreach (glob(DATA_ROOT . '/users/*/tunes/*/tune.json') ?: [] as $file) {
+        $t = json_decode((string) file_get_contents($file), true);
+        if (is_array($t) && same_piece($tune, $t)) $out[$file] = $t;
+    }
+    return $out;
+}
+
+/**
+ * Find the tune's license and save it in tune.json (noting who asked). If someone has already
+ * checked the same piece in any library, that answer is reused; otherwise (or when asked to
+ * check again) Claude researches it with web search and the answer goes to every copy of the piece.
+ */
 function license_check(string $dir, array $tune, array $user): never
 {
     if (!has_key()) send_json(503, ['error' => 'License checks need Claude: set ANTHROPIC_API_KEY in the server .env file.']);
     if (!can_check_license($user)) send_json(403, ['error' => 'Only the site owner can check licenses.']);
+    $again = !empty(read_json_body()['again']);
+    $copies = copies_of_piece($tune);
+    if (!$again) {
+        $known = array_filter(array_column($copies, 'license'), fn ($l) => is_array($l) && !empty($l['checkedAt']));
+        usort($known, fn ($a, $b) => strcmp($b['checkedAt'], $a['checkedAt']));
+        if ($known) {
+            save_license("$dir/tune.json", $known[0]);
+            send_json(200, $known[0]);
+        }
+    }
     set_time_limit(300);
     ignore_user_abort(true); // keep the result even if the page is closed while Claude searches
     try {
@@ -338,13 +363,20 @@ function license_check(string $dir, array $tune, array $user): never
         error_log('license check error: ' . $e->getMessage());
         send_json(502, ['error' => 'License check failed: ' . $e->getMessage()]);
     }
-    // Re-read the tune: it may have been edited while Claude was searching.
-    $current = load_tune(dirname($dir), $tune['id']);
-    if (!$current) send_json(404, ['error' => 'Tune not found']);
     $license['checkedBy'] = $user['name'] ?: $user['email'];
-    $current['license'] = $license;
-    write_json_atomic("$dir/tune.json", $current);
+    if (!save_license("$dir/tune.json", $license)) send_json(404, ['error' => 'Tune not found']);
+    foreach (array_keys($copies) as $file) if (realpath($file) !== realpath("$dir/tune.json")) save_license($file, $license);
     send_json(200, $license);
+}
+
+/** Set the license in a tune.json, re-reading it first in case it was edited meanwhile. False if it has gone. */
+function save_license(string $file, array $license): bool
+{
+    $current = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
+    if (!is_array($current)) return false;
+    $current['license'] = $license;
+    write_json_atomic($file, $current);
+    return true;
 }
 
 // ------------------------------------------------------------------ auth (Google sign-in)

@@ -343,5 +343,9 @@ export function showLicenseDialog(title, lic, { onCheck } = {}) {
   dlg.showModal();
 }
 
-/** Research a tune's license (Claude with web search, 10–30 s) and save it with the tune; owner is set for a friend's tune. */
-export const checkLicense = (id, owner) => api(`${tuneRoute(id, owner)}/license`, { method: 'POST' });
+/**
+ * Find a tune's license and save it with the tune; owner is set for a friend's tune. Reuses the answer
+ * if anyone has already checked the same piece; otherwise, or with again, Claude searches the web (10–30 s).
+ */
+export const checkLicense = (id, owner, { again = false } = {}) =>
+  api(`${tuneRoute(id, owner)}/license`, { method: 'POST', body: JSON.stringify({ again }) });

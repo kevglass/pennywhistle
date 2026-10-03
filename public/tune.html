@@ -111,7 +111,7 @@ async function runLicenseCheck() {
 $('#meta').addEventListener('click', (e) => {
   if (e.target.closest('#check-license')) runLicenseCheck();
   if (e.target.closest('.show-license')) {
-    const onCheck = canCheck ? async () => { tune.license = await checkLicense(tune.id, owner); renderLicense(); return tune.license; } : undefined;
+    const onCheck = canCheck ? async () => { tune.license = await checkLicense(tune.id, owner, { again: true }); renderLicense(); return tune.license; } : undefined;
     showLicenseDialog(tune.title, tune.license, { onCheck });
   }
 });
