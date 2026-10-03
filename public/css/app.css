@@ -272,3 +272,12 @@ body.has-player .topbar { position: static; padding-left: 60px; }
 .account .who { display: flex; flex-direction: column; padding: 6px 10px 8px; border-bottom: 1px solid var(--line); margin-bottom: 4px; overflow-wrap: anywhere; }
 .signin-needed { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); }
 #save-status:not(:empty) { margin-top: 10px; }
+/* phones: the logo already links to the library, so make room for the account button */
+@media (max-width: 640px) {
+  .topbar nav .nav-library { display: none; }
+  .topbar nav { flex: 0 0 auto; }
+  .brand { min-width: 0; overflow: hidden; }
+}
+@media (max-width: 380px) {
+  .brand .brand-short { display: none; }
+}
