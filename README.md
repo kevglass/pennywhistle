@@ -33,6 +33,7 @@ Avoid ports browsers block as unsafe (e.g. 6000, 6665-6669). Without an API key 
 | `ANTHROPIC_API_KEY` | Claude API key used to read sheet music (server-side only) |
 | `ANTHROPIC_WORKSPACE_ID` | Only for keys that must name a workspace |
 | `CLAUDE_MODEL` | Defaults to `claude-opus-5-5` |
+| `LICENSE_CHECKERS` | Comma-separated emails or `@domain`s allowed to run license checks (each costs API credits). Empty means nobody. Everyone else sees the results, and "Unknown" for unchecked tunes |
 | `LICENSE_MODEL` | Model for license checks, defaults to `claude-sonnet-5-5`: as accurate as Opus on tricky tunes, for less. Haiku 4.5 was not accurate enough |
 | `LICENSE_EFFORT` | Effort for license checks, defaults to `low` |
 | `PORT` | Local dev server port (`./dev.sh`) |

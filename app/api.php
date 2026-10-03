@@ -321,6 +321,7 @@ function transcribe(): never
 function license_check(string $dir, array $tune, array $user): never
 {
     if (!has_key()) send_json(503, ['error' => 'License checks need Claude: set ANTHROPIC_API_KEY in the server .env file.']);
+    if (!can_check_license($user)) send_json(403, ['error' => 'Only the site owner can check licenses.']);
     set_time_limit(300);
     ignore_user_abort(true); // keep the result even if the page is closed while Claude searches
     try {
@@ -388,15 +389,27 @@ function valid_sub(string $sub): bool
     return preg_match('/^[A-Za-z0-9_-]{1,255}$/', $sub) === 1;
 }
 
-function email_allowed(string $email): bool
+/** Whether an email matches a comma-separated list of emails and @domains (an empty list matches $ifEmpty). */
+function email_in_list(string $email, string $list, bool $ifEmpty): bool
 {
-    $list = array_filter(array_map(fn ($s) => strtolower(trim($s)), explode(',', env('ALLOWED_EMAILS'))));
-    if (!$list) return true;
+    $list = array_filter(array_map(fn ($s) => strtolower(trim($s)), explode(',', $list)));
+    if (!$list) return $ifEmpty;
     $email = strtolower($email);
     foreach ($list as $allowed) {
         if ($allowed === $email || (str_starts_with($allowed, '@') && str_ends_with($email, $allowed))) return true;
     }
     return false;
+}
+
+function email_allowed(string $email): bool
+{
+    return email_in_list($email, env('ALLOWED_EMAILS'), true);
+}
+
+/** Only the accounts in LICENSE_CHECKERS may run license checks (they cost API credits); nobody if it is empty. */
+function can_check_license(?array $user): bool
+{
+    return $user !== null && has_key() && email_in_list((string) $user['email'], env('LICENSE_CHECKERS'), false);
 }
 
 /** Check a Google ID token (from Sign in with Google) and return its claims. */
@@ -487,7 +500,7 @@ function handle(): never
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
     // Public routes: everything else needs a signed-in Google user.
-    if ($route === 'config' && $method === 'GET') send_json(200, ['transcribe' => has_key(), 'licenseCheck' => has_key(), 'model' => MODEL, 'googleClientId' => env('GOOGLE_CLIENT_ID')]);
+    if ($route === 'config' && $method === 'GET') send_json(200, ['transcribe' => has_key(), 'licenseCheck' => can_check_license(current_user()), 'model' => MODEL, 'googleClientId' => env('GOOGLE_CLIENT_ID')]);
     if ($route === 'auth/google' && $method === 'POST') login();
     if ($route === 'auth/logout' && $method === 'POST') logout();
 

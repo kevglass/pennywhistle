@@ -33,14 +33,14 @@ import { $, api, esc, errorHTML, loginUrl, topbar, tuneHref, licenseBadge, check
 $('#top').innerHTML = topbar('library');
 let lib = { mine: [], friends: [] };
 let loaded = false;
-let canCheck = false; // the server has a Claude API key
+let canCheck = false; // this account may run license checks
 const checking = new Set(); // ids of tunes whose license is being checked
 
-// The license status; unchecked tunes (yours or a friend's) get a button to check it.
+// The license status; for whoever may run checks, unchecked tunes (yours or a friend's) get a button to check it.
 const licenseCell = (t, owner) => {
   if (t.license) return licenseBadge(t.license, { button: true });
   if (checking.has(`${owner || ''}/${t.id}`)) return '<span class="lic-checking muted small"><span class="spinner" aria-hidden="true"></span>Checking…</span>';
-  if (!canCheck) return '<span class="muted small">Not checked</span>';
+  if (!canCheck) return '<span class="muted small">Unknown</span>';
   return `<button class="btn compact check-license" type="button" data-id="${esc(t.id)}" title="Look up who owns the rights to this tune and whether it can be used for free in a game or video">Check</button>`;
 };
 

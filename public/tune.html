@@ -86,14 +86,14 @@ renderNow($('#now'), null);
 
 let tune, displayAbc, pagesLoaded = false, canCheck = false;
 
-// The license status under the title: click it for the details in a pop-up. Unchecked tunes (yours or a friend's) get a Check button.
+// The license status under the title: click it for the details in a pop-up. For whoever may run checks, unchecked tunes get a Check button.
 function renderLicense({ checking = false } = {}) {
   const el = $('#license-slot');
   if (!el) return;
   if (checking) el.innerHTML = '<span class="lic-checking muted small"><span class="spinner" aria-hidden="true"></span>Checking license…</span>';
   else if (tune.license) el.innerHTML = licenseBadge(tune.license, { button: true });
   else if (canCheck) el.innerHTML = '<button class="btn compact" id="check-license" type="button" title="Look up who owns the rights to this tune and whether it can be used for free in a game or video">Check license</button>';
-  else el.innerHTML = '';
+  else el.innerHTML = '<span class="badge">License unknown</span>';
 }
 
 async function runLicenseCheck() {
