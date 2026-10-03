@@ -29,7 +29,7 @@
   </div>
 </main>
 <script type="module">
-import { $, api, esc, topbar } from './js/ui.js';
+import { $, api, esc, errorHTML, topbar } from './js/ui.js';
 $('#top').innerHTML = topbar('library');
 let tunes = [];
 function draw() {
@@ -53,7 +53,7 @@ function draw() {
 }
 $('#q').addEventListener('input', draw);
 try { tunes = await api('tunes'); draw(); }
-catch (e) { $('#list').innerHTML = `<p class="error">Could not load the library: ${esc(e.message)}</p>`; }
+catch (e) { $('#list').innerHTML = `<p>${errorHTML(e, 'Could not load the library')}</p>`; }
 </script>
 </body>
 </html>

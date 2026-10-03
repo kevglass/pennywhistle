@@ -1,7 +1,8 @@
 <?php
 // Penny Whistle Tabs API (PHP). Stores approved tunes as plain files under DATA_DIR
-// (default ../data, outside the web root) and proxies transcription to Claude so the
-// API key never reaches the browser. Routed via public/api/index.php?r=<route>.
+// (default ../data, outside the web root), one library per Google account, and proxies
+// transcription to Claude so the API key never reaches the browser.
+// Routed via public/api/index.php?r=<route>.
 declare(strict_types=1);
 
 use Anthropic\Client;
@@ -35,8 +36,8 @@ function env(string $key, string $default = ''): string
     return $v === false || $v === '' ? $default : $v;
 }
 
-$DATA = rtrim(env('DATA_DIR', PROJECT_ROOT . '/data'), '/');
-define('TUNES_DIR', $DATA . '/tunes');
+define('DATA_ROOT', rtrim(env('DATA_DIR', PROJECT_ROOT . '/data'), '/'));
+// TUNES_DIR (the signed-in user's library) is defined in handle() once the user is known.
 define('MODEL', env('CLAUDE_MODEL', 'claude-opus-5-5'));
 const UPLOAD_TYPES = ['application/pdf' => '.pdf', 'image/png' => '.png', 'image/jpeg' => '.jpg', 'image/gif' => '.gif', 'image/webp' => '.webp'];
 
@@ -78,13 +79,13 @@ function slug(string $s): string
     return $s !== '' ? $s : 'tune';
 }
 
-function ensure_data_dir(): void
+function ensure_dir(string $dir): void
 {
-    if (!is_dir(TUNES_DIR) && !mkdir(TUNES_DIR, 0775, true) && !is_dir(TUNES_DIR)) {
-        throw new HttpError('Cannot create the data folder; check permissions on ' . dirname(TUNES_DIR), 500);
+    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+        throw new HttpError('Cannot create the data folder; check permissions on ' . DATA_ROOT, 500);
     }
     // In case DATA_DIR ends up inside the web root, keep it private on Apache.
-    $ht = dirname(TUNES_DIR) . '/.htaccess';
+    $ht = DATA_ROOT . '/.htaccess';
     if (!file_exists($ht)) @file_put_contents($ht, "Require all denied\nDeny from all\n");
 }
 
@@ -254,39 +255,159 @@ function transcribe(): never
     exit;
 }
 
-// ------------------------------------------------------------------ auth
+// ------------------------------------------------------------------ auth (Google sign-in)
 
-function authorized(): bool
+const SESSION_DAYS = 30;
+
+/** Session cookie for the API folder only; sessions are files under DATA_DIR/sessions. */
+function start_session(): void
 {
-    $password = env('APP_PASSWORD');
-    if ($password === '') return true;
-    $given = $_SERVER['PHP_AUTH_PW'] ?? null;
-    if ($given === null) {
-        $h = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
-        if (str_starts_with($h, 'Basic ')) {
-            $parts = explode(':', (string) base64_decode(substr($h, 6)), 2);
-            $given = $parts[1] ?? '';
-        }
+    if (session_status() === PHP_SESSION_ACTIVE) return;
+    $dir = DATA_ROOT . '/sessions';
+    ensure_dir($dir);
+    session_save_path($dir);
+    session_name('pwtabs');
+    ini_set('session.gc_maxlifetime', (string) (SESSION_DAYS * 86400));
+    ini_set('session.use_strict_mode', '1');
+    $https = ($_SERVER['HTTPS'] ?? '') !== '' && $_SERVER['HTTPS'] !== 'off'
+        || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
+    session_set_cookie_params([
+        'lifetime' => SESSION_DAYS * 86400,
+        'path' => rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/') . '/',
+        'secure' => $https,
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+    session_start();
+}
+
+/** The signed-in user, or null. Releases the session lock so long requests (transcription) don't block others. */
+function current_user(): ?array
+{
+    if (!isset($_COOKIE['pwtabs'])) return null;
+    start_session();
+    $user = $_SESSION['user'] ?? null;
+    if ($user === null) session_destroy(); // stale cookie: don't leave an empty session behind
+    else session_write_close();
+    return is_array($user) && valid_sub((string) ($user['sub'] ?? '')) ? $user : null;
+}
+
+/** Google's account id ("sub") names the user's data folder, so keep it path-safe. */
+function valid_sub(string $sub): bool
+{
+    return preg_match('/^[A-Za-z0-9_-]{1,255}$/', $sub) === 1;
+}
+
+function email_allowed(string $email): bool
+{
+    $list = array_filter(array_map(fn ($s) => strtolower(trim($s)), explode(',', env('ALLOWED_EMAILS'))));
+    if (!$list) return true;
+    $email = strtolower($email);
+    foreach ($list as $allowed) {
+        if ($allowed === $email || (str_starts_with($allowed, '@') && str_ends_with($email, $allowed))) return true;
     }
-    return is_string($given) && hash_equals($password, $given);
+    return false;
+}
+
+/** Check a Google ID token (from Sign in with Google) and return its claims. */
+function verify_google_token(string $token): array
+{
+    $clientId = env('GOOGLE_CLIENT_ID');
+    if ($clientId === '') throw new HttpError('Sign-in is not configured: set GOOGLE_CLIENT_ID in the server .env file.', 503);
+    try {
+        $res = (new \GuzzleHttp\Client(['timeout' => 10]))->get('https://oauth2.googleapis.com/tokeninfo', [
+            'query' => ['id_token' => $token],
+            'http_errors' => false,
+        ]);
+    } catch (Throwable $e) {
+        error_log('google tokeninfo error: ' . $e->getMessage());
+        throw new HttpError('Could not reach Google to check the sign-in. Please try again.', 502);
+    }
+    $c = json_decode((string) $res->getBody(), true);
+    if ($res->getStatusCode() !== 200 || !is_array($c)) throw new HttpError('Google sign-in was not accepted. Please try again.', 401);
+    $ok = ($c['aud'] ?? '') === $clientId
+        && in_array($c['iss'] ?? '', ['accounts.google.com', 'https://accounts.google.com'], true)
+        && (int) ($c['exp'] ?? 0) > time()
+        && in_array($c['email_verified'] ?? '', ['true', true], true)
+        && valid_sub((string) ($c['sub'] ?? ''));
+    if (!$ok) throw new HttpError('Google sign-in was not accepted. Please try again.', 401);
+    return $c;
+}
+
+function user_dir(string $sub): string
+{
+    return DATA_ROOT . '/users/' . $sub;
+}
+
+/** Tunes saved before sign-in existed (DATA_DIR/tunes) go to LEGACY_OWNER_EMAIL's library on their first sign-in. */
+function adopt_legacy_tunes(array $user): void
+{
+    $owner = strtolower(trim(env('LEGACY_OWNER_EMAIL')));
+    $legacy = DATA_ROOT . '/tunes';
+    $mine = user_dir($user['sub']) . '/tunes';
+    if ($owner === '' || $owner !== strtolower($user['email']) || !is_dir($legacy) || is_dir($mine)) return;
+    if (!rename($legacy, $mine)) error_log("could not move $legacy to $mine");
+}
+
+function login(): never
+{
+    // A JSON content type can't be sent cross-site without a CORS preflight, which this API never grants.
+    if (!str_starts_with($_SERVER['CONTENT_TYPE'] ?? '', 'application/json')) send_json(415, ['error' => 'Expected JSON']);
+    $body = read_json_body();
+    $claims = verify_google_token((string) ($body['credential'] ?? ''));
+    $email = (string) $claims['email'];
+    if (!email_allowed($email)) send_json(403, ['error' => "$email is not allowed to use this site."]);
+    $user = [
+        'sub' => (string) $claims['sub'],
+        'email' => $email,
+        'name' => mb_substr((string) ($claims['name'] ?? $email), 0, 200),
+        'picture' => is_string($claims['picture'] ?? null) ? $claims['picture'] : null,
+    ];
+    $dir = user_dir($user['sub']);
+    ensure_dir($dir);
+    adopt_legacy_tunes($user);
+    // Who owns each folder, for whoever looks after the server.
+    write_json_atomic("$dir/user.json", $user + ['lastLogin' => gmdate('Y-m-d\TH:i:s\Z')]);
+
+    start_session();
+    session_regenerate_id(true);
+    $_SESSION['user'] = $user;
+    session_write_close();
+    send_json(200, $user);
+}
+
+function logout(): never
+{
+    if (isset($_COOKIE['pwtabs'])) {
+        start_session();
+        $_SESSION = [];
+        session_destroy();
+        $p = session_get_cookie_params();
+        setcookie('pwtabs', '', ['expires' => time() - 3600] + array_intersect_key($p, array_flip(['path', 'secure', 'httponly', 'samesite'])));
+    }
+    send_json(200, ['ok' => true]);
 }
 
 // ------------------------------------------------------------------ router
 
 function handle(): never
 {
-    if (!authorized()) {
-        header('WWW-Authenticate: Basic realm="Penny Whistle Tabs"');
-        send_json(401, ['error' => 'Authentication required']);
-    }
     $route = trim((string) ($_GET['r'] ?? ''), '/');
     $parts = $route === '' ? [] : explode('/', $route);
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
-    if ($route === 'config' && $method === 'GET') send_json(200, ['transcribe' => has_key(), 'model' => MODEL]);
+    // Public routes: everything else needs a signed-in Google user.
+    if ($route === 'config' && $method === 'GET') send_json(200, ['transcribe' => has_key(), 'model' => MODEL, 'googleClientId' => env('GOOGLE_CLIENT_ID')]);
+    if ($route === 'auth/google' && $method === 'POST') login();
+    if ($route === 'auth/logout' && $method === 'POST') logout();
+
+    $user = current_user();
+    if (!$user) send_json(401, ['error' => 'Please sign in', 'login' => true]);
+    if ($route === 'auth/me' && $method === 'GET') send_json(200, $user);
     if ($route === 'transcribe' && $method === 'POST') transcribe();
     if (($parts[0] ?? '') !== 'tunes') send_json(404, ['error' => 'Not found']);
-    ensure_data_dir();
+    define('TUNES_DIR', user_dir($user['sub']) . '/tunes');
+    ensure_dir(TUNES_DIR);
     $id = $parts[1] ?? null;
 
     if ($id === null && $method === 'GET') {

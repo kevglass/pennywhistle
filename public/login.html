@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sign in · Penny Whistle Tabs</title>
+<script>try{if(localStorage.getItem('pw-theme')==='dark')document.documentElement.dataset.theme='dark'}catch(e){}</script>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/app.css">
+<script src="https://accounts.google.com/gsi/client" async></script>
+<style>
+  .login { max-width: 400px; margin: 12vh auto 0; text-align: center; }
+  .login > svg { width: 56px; height: 56px; }
+  .login h1 { margin: 8px 0 4px; }
+  .login .card { margin-top: 24px; padding: 28px 20px; display: grid; justify-items: center; gap: 14px; }
+  #google-button { min-height: 44px; }
+</style>
+</head>
+<body>
+<main class="login">
+  <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="13" width="26" height="6" rx="3" fill="var(--accent)"/><circle cx="12" cy="16" r="1.6" fill="var(--surface)"/><circle cx="17" cy="16" r="1.6" fill="var(--surface)"/><circle cx="22" cy="16" r="1.6" fill="var(--surface)"/><rect x="3" y="13" width="5" height="6" rx="2" fill="var(--ink)"/></svg>
+  <h1>Penny Whistle Tabs</h1>
+  <p class="muted" style="margin:0">Turn sheet music into whistle tabs with guitar chords.</p>
+  <div class="card">
+    <p style="margin:0">Sign in to see your tune library.</p>
+    <div id="google-button"></div>
+    <div id="status" class="status" aria-live="polite"></div>
+  </div>
+</main>
+<script type="module">
+// Standalone on purpose: no app modules are needed to sign in.
+const $ = (sel) => document.querySelector(sel);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+async function api(route, opts = {}) {
+  const res = await fetch(`api/index.php?r=${route}`, { ...opts, headers: opts.body ? { 'Content-Type': 'application/json' } : {} });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
+// Only return to pages of this app (no "//host" or "javascript:" redirects).
+const params = new URLSearchParams(location.search);
+const next = params.get('next') || '';
+const target = /^[a-z0-9-]+\.html(\?[^#]*)?$/i.test(next) ? next : './';
+const say = (html) => { $('#status').innerHTML = html; };
+
+// Opened in a new tab from a page with unsaved work: once signed in, go back to that tab.
+function done() {
+  if (params.get('then') !== 'close') { location.replace(target); return; }
+  window.close();
+  $('#google-button').hidden = true;
+  say('You’re signed in. Close this tab and carry on where you were.');
+}
+
+async function signedIn({ credential }) {
+  say('<span class="spinner"></span> Signing in…');
+  try {
+    await api('auth/google', { method: 'POST', body: JSON.stringify({ credential }) });
+    done();
+  } catch (e) {
+    say(`<span class="error">${esc(e.message)}</span>`);
+  }
+}
+
+try {
+  // Already signed in? Skip straight to the app.
+  const me = await fetch('api/index.php?r=auth/me');
+  if (me.ok) done();
+  else {
+    const { googleClientId } = await api('config');
+    if (!googleClientId) throw new Error('Sign-in is not configured on this server (GOOGLE_CLIENT_ID).');
+    for (let i = 0; !window.google?.accounts?.id; i++) {
+      if (i > 200) throw new Error('Could not load Google sign-in. Check your connection or content blockers, then reload.');
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    google.accounts.id.initialize({ client_id: googleClientId, callback: signedIn, ux_mode: 'popup' });
+    google.accounts.id.renderButton($('#google-button'), {
+      theme: document.documentElement.dataset.theme === 'dark' ? 'filled_black' : 'outline',
+      size: 'large', shape: 'pill', text: 'signin_with',
+    });
+    google.accounts.id.prompt(); // One Tap, when the browser allows it
+  }
+} catch (e) {
+  say(`<span class="error">${esc(e.message)}</span>`);
+}
+</script>
+</body>
+</html>

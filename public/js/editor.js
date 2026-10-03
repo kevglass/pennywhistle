@@ -1,7 +1,7 @@
 import { analyzeTune, buildDisplayAbc, bestTranspose, whistleStats, cleanAbc, tabDocument, transposedKeyName } from './core.js';
 import { TabView, Player, tone, defaultBpm } from './render.js';
 import { renderPages, pagesToImages, showPages, ACCEPTED } from './originals.js';
-import { $, api, apiUrl, esc, topbar, renderNow, originalSources, tabStyleControl } from './ui.js';
+import { $, api, apiUrl, apiError, errorHTML, esc, topbar, renderNow, originalSources, tabStyleControl } from './ui.js';
 
 $('#top').innerHTML = topbar('new');
 
@@ -44,7 +44,7 @@ let showOriginal = false;
 const view = new TabView($('#preview'), {
   onSelect: (item, i, ctx) => {
     renderNow($('#now'), item, ctx);
-    if (ctx.source !== 'play' && item.type === 'note') tone(item.midi, undefined, Math.min(0.6, 0.25 + item.beats * 0.1));
+    if (ctx.source !== 'play' && item.type === 'note') tone(item.midi, undefined, Math.min(0.7, 0.3 + item.beats * 0.12));
   },
 });
 const player = new Player(view, { onStop: () => { $('#play').textContent = '▶ Play'; } });
@@ -245,7 +245,7 @@ $('#read').addEventListener('click', async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pages: pagesToImages(pages), hint: $('#hint').value }),
     });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Server error ${res.status}`);
+    if (!res.ok) throw apiError(res, await res.json().catch(() => ({})));
     const reader = res.body.getReader();
     const dec = new TextDecoder();
     let buf = '';
@@ -276,7 +276,7 @@ $('#read').addEventListener('click', async () => {
     $('#status').innerHTML = `Done in ${secs}s.${done.truncated ? ' <span class="error">The output was cut short; check the last bars.</span>' : ''} Compare the tab with the original, fix anything in the notation box, then approve.`;
     $('#step-review').scrollIntoView({ behavior: 'smooth' });
   } catch (e) {
-    $('#status').innerHTML = `<span class="error">${esc(e.message)}</span>`;
+    $('#status').innerHTML = errorHTML(e, '', { newTab: true });
   } finally {
     clearInterval(clock);
     btn.disabled = false;
@@ -290,6 +290,7 @@ $('#save').addEventListener('click', async () => {
   const btn = $('#save');
   btn.disabled = true;
   btn.textContent = 'Saving…';
+  $('#save-status').innerHTML = '';
   try {
     const body = {
       title: $('#title').value.trim() || srcData.title,
@@ -307,7 +308,8 @@ $('#save').addEventListener('click', async () => {
     const msg = e instanceof TypeError
       ? `the request did not reach the server (${e.message}). Check your connection and try again.`
       : e.message;
-    alert('Could not save: ' + msg);
+    if (e.signIn) $('#save-status').innerHTML = errorHTML(e, '', { newTab: true });
+    else alert('Could not save: ' + msg);
     btn.disabled = false;
     btn.textContent = 'Approve & save';
   }
@@ -340,7 +342,7 @@ $('#save').addEventListener('click', async () => {
       update();
       if (existing.originals?.length) await loadPages(originalSources(existing));
     } catch (e) {
-      $('#status').innerHTML = `<span class="error">Could not load that tune: ${esc(e.message)}</span>`;
+      $('#status').innerHTML = errorHTML(e, 'Could not load that tune');
     }
   } else update();
 })();

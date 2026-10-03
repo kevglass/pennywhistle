@@ -19,7 +19,7 @@
     </div>
     <div class="actions">
       <button class="btn" id="toggle-original" aria-pressed="false" hidden>Show original</button>
-      <button class="btn primary" id="pdf" type="button"><span class="wide-only">Download&nbsp;</span>PDF</button>
+      <button class="btn primary" id="pdf" type="button"><span class="wide-only">Download</span> PDF</button>
       <a class="btn" id="edit" href="#">Edit</a>
       <details class="more">
         <summary class="btn" aria-label="More actions">⋯ More</summary>
@@ -35,8 +35,9 @@
   <div class="split" id="split">
     <aside class="original-pane" id="original" hidden aria-label="Original music"></aside>
     <div class="tab-pane">
-      <div class="player">
+      <div class="player" role="region" aria-label="Player">
         <div class="controls">
+          <button class="player-toggle" type="button" aria-expanded="true" aria-label="Hide player" title="Hide player"><span class="when-open" aria-hidden="true">‹</span><span class="when-closed" aria-hidden="true">♪</span></button>
           <button class="btn" id="play" type="button">▶ Play</button>
           <button class="btn settings-toggle" type="button" aria-expanded="false" aria-label="Player settings">⚙</button>
           <div class="settings">
@@ -46,7 +47,6 @@
           </div>
         </div>
         <div class="now" id="now"></div>
-      <button class="btn player-collapse" type="button" aria-expanded="true" aria-label="Hide player" title="Hide player">▾</button>
       </div>
       <div id="tab"></div>
       <p class="muted small no-print">Tip: tap any note in the music or the tab to see its fingering.<span class="kbd-tip"> Use ← → to step through the notes.</span></p>
@@ -63,7 +63,7 @@
 import { buildDisplayAbc } from './js/core.js';
 import { TabView, Player, tone, defaultBpm } from './js/render.js';
 import { renderPages, showPages } from './js/originals.js';
-import { $, api, esc, topbar, renderNow, renderChordList, originalSources, tabStyleControl } from './js/ui.js';
+import { $, api, esc, topbar, renderNow, renderChordList, originalSources, tabStyleControl, errorHTML, loginUrl } from './js/ui.js';
 
 $('#top').innerHTML = topbar();
 const id = new URLSearchParams(location.search).get('id');
@@ -71,7 +71,7 @@ const id = new URLSearchParams(location.search).get('id');
 const view = new TabView($('#tab'), {
   onSelect: (item, i, ctx) => {
     renderNow($('#now'), item, ctx);
-    if (ctx.source !== 'play' && item.type === 'note' && $('#sound').checked) tone(item.midi, undefined, Math.min(0.6, 0.25 + item.beats * 0.1));
+    if (ctx.source !== 'play' && item.type === 'note' && $('#sound').checked) tone(item.midi, undefined, Math.min(0.7, 0.3 + item.beats * 0.12));
   },
 });
 const player = new Player(view, { onStop: () => { $('#play').textContent = '▶ Play'; } });
@@ -88,7 +88,7 @@ async function setOriginal(show) {
     pagesLoaded = true;
     $('#original').innerHTML = '<p class="muted">Loading original…</p>';
     try { showPages($('#original'), await renderPages(originalSources(tune))); }
-    catch (e) { $('#original').innerHTML = `<p class="error">Could not load the original: ${esc(e.message)}</p>`; }
+    catch (e) { $('#original').innerHTML = `<p>${errorHTML(e, 'Could not load the original')}</p>`; }
   }
   view.render(displayAbc);
 }
@@ -139,8 +139,8 @@ try {
     $('#toggle-original').addEventListener('click', () => setOriginal($('#original').hidden));
   }
 } catch (e) {
-  $('#title').textContent = 'Tune not found';
-  $('#tab').innerHTML = `<p class="error">${esc(e.message)}</p><p><a href="./">Back to the library</a></p>`;
+  $('#title').textContent = e.signIn ? 'Sign in needed' : 'Tune not found';
+  $('#tab').innerHTML = `<p>${errorHTML(e)}</p>${e.signIn ? '' : '<p><a href="./">Back to the library</a></p>'}`;
   document.querySelectorAll('.actions .btn, .player').forEach((b) => (b.hidden = true));
 }
 
@@ -153,8 +153,13 @@ $('#play').addEventListener('click', () => {
 $('#print').addEventListener('click', () => window.print());
 $('#delete').addEventListener('click', async () => {
   if (!confirm(`Delete “${tune.title}” and its original files from the library?`)) return;
-  await api(`tunes/${tune.id}/delete`, { method: 'POST' });
-  location.href = './';
+  try {
+    await api(`tunes/${tune.id}/delete`, { method: 'POST' });
+    location.href = './';
+  } catch (e) {
+    if (e.signIn) location.href = loginUrl(); // nothing unsaved on this page
+    else alert('Could not delete: ' + e.message);
+  }
 });
 document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, textarea, select')) return;

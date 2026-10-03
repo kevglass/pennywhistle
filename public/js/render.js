@@ -3,7 +3,7 @@
 import { analyzeTune, fingerNumbers, markFor } from './core.js';
 
 // vertical room reserved under each system for the tab row
-const tabHeight = () => (getTabStyle() === 'holes' ? 117 : 63) + (getShowNoteNames() ? 15 : 0);
+const tabHeight = () => (getTabStyle() === 'holes' ? 103 : 45) + (getShowNoteNames() ? 15 : 0);
 
 const FRACTIONS = { 0.25: '¼', 0.333: '⅓', 0.5: '½', 0.667: '⅔', 0.75: '¾', 0.125: '⅛', 0.167: '⅙' };
 export function beatsLabel(b) {
@@ -191,13 +191,6 @@ export class TabView {
         cell.addEventListener('click', (e) => { e.stopPropagation(); this.select(r.index, { source: 'tab' }); });
         row.appendChild(cell);
 
-        const bar = document.createElement('div');
-        bar.className = `sustain ${it.type}`;
-        bar.style.left = x - 6 + 'px';
-        bar.style.width = Math.max(10, next - x - 2) + 'px';
-        bar.innerHTML = `<span>${len}</span>`;
-        bar.title = `${len} beat${it.beats === 1 ? '' : 's'}`;
-        row.appendChild(bar);
         this.cells[r.index] = cell;
       });
     }

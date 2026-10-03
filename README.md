@@ -6,7 +6,7 @@ Turn sheet music (PDF or photos/scans) into easy-to-follow **D tin whistle tabla
 - The engraved score is shown with a whistle tab row under every line. Each note shows **how many holes to hold down from the top** (`3` = holes 1–3; `0/2` = top hole open, hold the next 2; `0` = all open; `'` after the number = blow harder for the high octave; `½` = also half-cover the next hole), or hole diagrams if you prefer, plus a bar for how long it lasts. Rests and tied notes are marked too.
 - **Download PDF** gives the score with the number tab under every line and guitar chord diagrams. There's also a JSON download.
 - Light mode by default, with a dark-mode toggle in the top bar.
-- Works on phones and tablets: on a phone the player becomes a compact bar at the bottom of the screen, and **Play** uses a synthesised tin-whistle sound (breathy tone, air "chiff" on each note, gentle vibrato).
+- A thin player bar fixed to the top of the screen (play, tempo, tab style, and the selected note's fingering and chord) collapses to a small icon at the top left. **Play** and tapping a note use recordings of a real D tin whistle (see Credits). Works on phones and tablets.
 - Click any note in the score (or in the tab) to highlight its fingering and see it enlarged with the guitar chord for that spot. The ← → keys step through the notes and **Play** plays the tune, following repeats.
 - Chords come from the score when it prints them. Otherwise the app suggests chords that fit each bar.
 - **Best key for whistle** finds a transposition that keeps every note in range with as little half-holing as possible.
@@ -33,7 +33,19 @@ Avoid ports browsers block as unsafe (e.g. 6000, 6665-6669). Without an API key 
 | `CLAUDE_MODEL` | Defaults to `claude-opus-5-5` |
 | `PORT` | Local dev server port (`./dev.sh`) |
 | `DATA_DIR` | Where tunes are stored, defaults to `data/` next to the app code |
-| `APP_PASSWORD` | Optional: requires HTTP Basic auth for the API (saving and reading music), since transcriptions cost API credits |
+| `GOOGLE_CLIENT_ID` | Required: OAuth client ID for Google sign-in (see below) |
+| `ALLOWED_EMAILS` | Optional: comma-separated emails or `@domain`s allowed to sign in. Empty lets any Google account in, and transcriptions cost API credits |
+| `LEGACY_OWNER_EMAIL` | Optional: on this account's first sign-in, tunes saved before sign-in existed (`data/tunes/`) move into its library |
+
+### Google sign-in
+
+Everyone signs in with Google, and each Google account has its own tune library. To set it up:
+
+1. In the [Google Cloud console](https://console.cloud.google.com/apis/credentials), create an **OAuth client ID** of type **Web application**.
+2. Under **Authorised JavaScript origins**, add `http://localhost:6060` (or your dev `PORT`) and `https://cokeandcode.com`. No redirect URIs are needed.
+3. Put the client ID in `.env` as `GOOGLE_CLIENT_ID`.
+
+The browser gets an ID token from Google on `login.html`; the server checks it with Google (audience, issuer, expiry, verified email) and then keeps a 30-day session cookie, scoped to `api/`. Sessions are files in `data/sessions/`.
 
 ## Deploying
 
@@ -50,7 +62,7 @@ The script:
 Server layout:
 
 ```
-pennywhistle/            public: index.html, editor.html, tune.html, js/, css/, vendor/, api/index.php
+pennywhistle/            public: index.html, login.html, editor.html, tune.html, js/, css/, vendor/, api/index.php
 pennywhistle/_private/   app/ (PHP code), vendor/ (Composer packages), .env, data/ (saved tunes)
 ```
 
@@ -69,13 +81,15 @@ Set `SECRETS_PASSWORD` to skip the prompt.
 
 ## Storage (no database)
 
-Each approved tune is a folder:
+Each Google account has a folder, named by its Google account ID, and each approved tune is a folder inside it:
 
 ```
-data/tunes/<id>/
-  tune.json        everything about the tune (see below)
-  tune.abc         the displayed notation (after transposing and adding chords)
-  original-1.pdf   the uploaded original(s): .pdf / .png / .jpg …
+data/users/<google-id>/
+  user.json        email and name of the account, last sign-in
+  tunes/<id>/
+    tune.json        everything about the tune (see below)
+    tune.abc         the displayed notation (after transposing and adding chords)
+    original-1.pdf   the uploaded original(s): .pdf / .png / .jpg …
 ```
 
 `tune.json` holds the title, settings, the approved ABC transcription, and a `tab` object. That object has the key, the meter, the chords used, and every bar's chords and notes. Each note has its pitch, `fingers` (the number tab, e.g. `3`, `0/2` or `5'`), MIDI number, length in beats, whistle `holes` (top to bottom, `X` = covered, `O` = open, `H` = half-covered) and `register` (2 = blow harder). Back up or move the `data/` folder to keep the library.
@@ -83,8 +97,13 @@ data/tunes/<id>/
 ## Code map
 
 - `public/`: the static site. `js/core.js` holds the fingering chart, tab data, chord suggestion and best-key search. `js/render.js` draws the score with [abcjs](https://www.abcjs.net/) plus the tab rows, highlighting and playback. PDFs are rendered in the browser with [PDF.js](https://mozilla.github.io/pdf.js/). Both libraries are bundled in `public/vendor/`.
-- `public/api/index.php` → `app/api.php`: the API (`?r=config`, `tunes`, `tunes/<id>`, `tunes/<id>/files/<file>`, `tunes/<id>/delete`, `transcribe`). Transcription streams from Claude through the official Anthropic PHP SDK, with server-side fallback if a request is declined.
+- `public/api/index.php` → `app/api.php`: the API (`?r=config`, `auth/google`, `auth/me`, `auth/logout`, `tunes`, `tunes/<id>`, `tunes/<id>/files/<file>`, `tunes/<id>/delete`, `transcribe`). Transcription streams from Claude through the official Anthropic PHP SDK, with server-side fallback if a request is declined.
 - `scripts/secrets.php`, `deploy.sh`, `dev.sh`: tooling.
 - `samples/`: public-domain and CC-licensed sheet music for testing (see `samples/README.md`).
 
 Transcription accuracy depends on scan quality. Always compare the tab with the original (the editor shows them side by side) before approving.
+
+## Credits
+
+- Tin whistle playback samples: cut from *Báidín Fheilimí* played by **Jules Grandgagnage** ([Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Baidin_Feidhlimidh_tinwhistleD.ogg)), [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The sample files in `public/audio/` are CC BY-SA 4.0; see `public/audio/README.md`.
+- Score engraving: [abcjs](https://www.abcjs.net/) (MIT). PDF rendering: [PDF.js](https://mozilla.github.io/pdf.js/) (Apache-2.0). PDF export: [jsPDF](https://github.com/parallax/jsPDF) and [svg2pdf.js](https://github.com/yWorks/svg2pdf.js) (MIT).
