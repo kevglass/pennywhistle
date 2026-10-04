@@ -285,17 +285,11 @@ function forget_public_domain(): void
 
 /**
  * The public domain section of $sub's library: the free-to-use pieces, leaving out any piece
- * already in their own or their friends' libraries. Each summary carries its owner's account id.
+ * already shown (piece_of() of each tune in their own or their friends' libraries). Each summary
+ * carries its owner's account id.
  */
-function public_domain_tunes(string $sub, array $friendSubs): array
+function public_domain_tunes(string $sub, array $friendSubs, array $shown): array
 {
-    $shown = [];
-    foreach ([$sub, ...$friendSubs] as $s) {
-        foreach (glob(user_dir($s) . '/tunes/*/tune.json') ?: [] as $file) {
-            $t = json_decode((string) file_get_contents($file), true);
-            if (is_array($t)) $shown[] = piece_of($t);
-        }
-    }
     $out = [];
     foreach (public_domain_pieces() as $x) {
         if ($x['owner'] === $sub || in_array($x['owner'], $friendSubs, true)) continue;
@@ -316,18 +310,74 @@ function readable_tune(array $user, string $owner, string $id): ?array
     return $tune && (is_friend($user['sub'], $owner) || is_public_domain($tune)) ? $tune : null;
 }
 
+/**
+ * Copy tunes from $user's library into a friend's, as their own tunes (with the original files):
+ * the tunes with the given ids, or the whole library when $ids is null. Pieces the friend already
+ * has are skipped. Returns ['copied' => [titles], 'skipped' => [titles]].
+ */
+function share_tunes(array $user, string $sub, ?array $ids): array
+{
+    if (!valid_sub($sub) || !is_friend($user['sub'], $sub)) throw new HttpError('You can only share tunes with your friends', 404);
+    $from = user_dir($user['sub']) . '/tunes';
+    $to = user_dir($sub) . '/tunes';
+    $tunes = $ids === null ? load_tunes($from) : array_values(array_filter(array_map(fn ($id) => load_tune($from, (string) $id), $ids)));
+    if (!$tunes) throw new HttpError('There are no tunes to share', 400);
+    ensure_dir($to);
+    // One share at a time, so two at once (a double click, or two friends) can't both copy a piece.
+    return with_friends_lock(fn () => copy_new_pieces($user, $tunes, $from, $to));
+}
+
+/** Copy each tune into the $to library unless the piece is already there (or was copied earlier in this share). */
+function copy_new_pieces(array $user, array $tunes, string $from, string $to): array
+{
+    $theirs = array_map('piece_of', load_tunes($to));
+    $now = gmdate('Y-m-d\TH:i:s.v\Z');
+    $out = ['copied' => [], 'skipped' => []];
+    foreach ($tunes as $t) {
+        $piece = piece_of($t);
+        foreach ($theirs as $p) {
+            if (pieces_match($piece, $p)) {
+                $out['skipped'][] = $t['title'];
+                continue 2;
+            }
+        }
+        $id = slug($t['title']) . '-' . bin2hex(random_bytes(3));
+        $dir = "$to/$id";
+        mkdir($dir, 0775, true);
+        foreach (glob("$from/{$t['id']}/*") ?: [] as $f) {
+            if (is_file($f) && basename($f) !== 'tune.json') copy($f, "$dir/" . basename($f));
+        }
+        write_json_atomic("$dir/tune.json", ['id' => $id, 'createdAt' => $now, 'updatedAt' => $now,
+            'sharedBy' => ['sub' => $user['sub'], 'name' => $user['name'], 'email' => $user['email'], 'at' => $now]] + $t);
+        $theirs[] = $piece;
+        $out['copied'][] = $t['title'];
+    }
+    return $out;
+}
+
 /** Routes under friends/ and library. Returns only by sending a response. */
 function handle_friends(array $user, array $parts, string $method): never
 {
+    // The whole library, each piece once: all your own tunes, then friends' tunes (friends in
+    // alphabetical order) leaving out pieces already listed, then the public domain section.
     if ($parts[0] === 'library' && $method === 'GET') {
+        $mine = load_tunes(user_dir($user['sub']) . '/tunes');
+        $shown = array_map('piece_of', $mine);
         $friends = [];
         foreach (friends_overview($user)['friends'] as $f) {
-            $friends[] = $f + ['tunes' => list_tunes(user_dir($f['sub']) . '/tunes')];
+            $tunes = [];
+            foreach (load_tunes(user_dir($f['sub']) . '/tunes') as $t) {
+                $piece = piece_of($t);
+                foreach ($shown as $s) if (pieces_match($piece, $s)) continue 2;
+                $shown[] = $piece;
+                $tunes[] = summary($t);
+            }
+            $friends[] = $f + ['tunes' => $tunes];
         }
         send_json(200, [
-            'mine' => list_tunes(user_dir($user['sub']) . '/tunes'),
+            'mine' => array_map('summary', $mine),
             'friends' => $friends,
-            'publicDomain' => public_domain_tunes($user['sub'], array_column($friends, 'sub')),
+            'publicDomain' => public_domain_tunes($user['sub'], array_column($friends, 'sub'), $shown),
         ]);
     }
 
@@ -377,6 +427,10 @@ function handle_friends(array $user, array $parts, string $method): never
         case 'remove':
             remove_friend($user, $sub);
             break;
+        case 'share': // {"sub", "ids": [...]}, or no ids for the whole library
+            $ids = $body['ids'] ?? null;
+            if ($ids !== null && (!is_array($ids) || !$ids)) throw new HttpError('ids must be a list of tune ids', 400);
+            send_json(200, share_tunes($user, $sub, $ids) + friends_overview($user));
         default:
             send_json(404, ['error' => 'Not found']);
     }

@@ -19,10 +19,11 @@ export async function api(route, opts = {}) {
   return data;
 }
 
-/** Error for a failed API response; signIn is set when the user needs to sign in (again). */
+/** Error for a failed API response; signIn is set when the user needs to sign in (again), data is the response body. */
 export function apiError(res, data = {}) {
   const e = new Error(data.error || `Request failed (${res.status})`);
   e.signIn = res.status === 401 && !!data.login;
+  e.data = data;
   return e;
 }
 

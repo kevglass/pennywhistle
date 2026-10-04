@@ -38,6 +38,7 @@
       <button class="btn" id="toggle-original" aria-pressed="false" hidden>Show original</button>
       <button class="btn primary" id="pdf" type="button"><svg class="icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span><span class="wide-only">Download </span>PDF</span></button>
       <a class="btn" id="edit" href="#">Edit</a>
+      <button class="btn" id="share" type="button" title="Copy this tune into a friend’s library" hidden>Share</button>
       <details class="more">
         <summary class="btn" aria-label="More actions">⋯ More</summary>
         <div class="menu">
@@ -138,7 +139,8 @@ try {
   const t = tune.tab || {};
   $('#meta').innerHTML = [
     tune.publicDomain ? '<span class="badge accent">Public domain</span>'
-      : tune.owner && `<span class="badge accent">From ${esc(tune.owner.name || tune.owner.email)}’s library</span>`,
+      : tune.owner ? `<span class="badge accent">From ${esc(tune.owner.name || tune.owner.email)}’s library</span>`
+      : tune.sharedBy && `<span class="badge accent" title="Copied into your library ${new Date(tune.sharedBy.at).toLocaleDateString()}">Shared by ${esc(tune.sharedBy.name || tune.sharedBy.email)}</span>`,
     tune.composer && `<span class="badge">${esc(tune.composer)}</span>`,
     t.key && `<span class="badge accent">Key ${esc(t.key)}</span>`,
     t.meter && `<span class="badge">${esc(t.meter)}</span>`,
@@ -150,6 +152,7 @@ try {
   renderLicense();
   $('#edit').href = `editor.html?id=${encodeURIComponent(tune.id)}`;
   if (tune.owner) $('#edit').hidden = $('#delete').hidden = true;
+  else $('#share').hidden = false;
   $('#json').href = URL.createObjectURL(new Blob([JSON.stringify(tune, null, 2)], { type: 'application/json' }));
   $('#json').download = `${tune.id}.json`;
 
@@ -223,6 +226,42 @@ function drawChords() {
 }
 chordInstrumentControl($('#guitar'), $('#chord-instrument'), () => { drawChords(); if (player.playing) startPlay(); });
 $('#print').addEventListener('click', () => window.print());
+
+// Share: copy this tune into a friend's library, where it becomes their own tune.
+$('#share').addEventListener('click', async () => {
+  const dlg = document.createElement('dialog');
+  dlg.className = 'license-dialog license-card';
+  dlg.innerHTML = `<div class="lic-head"><h2>Share “${esc(tune.title)}”</h2><button class="btn" type="button" data-close aria-label="Close">✕</button></div>
+    <p class="muted small">The tune is copied into your friend’s library as their own: they can edit it, and your changes won’t reach their copy.</p>
+    <ul class="person-list"><li class="muted"><span class="spinner" aria-hidden="true"></span>Loading friends…</li></ul>`;
+  dlg.addEventListener('close', () => dlg.remove());
+  document.body.append(dlg);
+  dlg.showModal();
+  const list = dlg.querySelector('ul');
+  try {
+    const { friends } = await api('friends');
+    list.innerHTML = friends.map((f) => `<li class="person"><div class="who"><strong>${esc(f.name || f.email)}</strong>${f.name && f.name !== f.email ? `<span class="muted small">${esc(f.email)}</span>` : ''}</div>
+      <div class="acts"><button class="btn primary" type="button" data-sub="${esc(f.sub)}">Copy to their library</button></div></li>`).join('')
+      || '<li class="muted">You have no friends to share with yet. <a href="friends.html">Add a friend</a>.</li>';
+  } catch (e) {
+    list.innerHTML = `<li>${errorHTML(e, 'Could not load your friends', { newTab: true })}</li>`;
+  }
+  dlg.addEventListener('click', async (e) => {
+    if (e.target === dlg || e.target.closest('[data-close]')) return dlg.close();
+    const btn = e.target.closest('button[data-sub]');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.textContent = 'Copying…';
+    try {
+      const res = await api('friends/share', { method: 'POST', body: JSON.stringify({ sub: btn.dataset.sub, ids: [tune.id] }) });
+      btn.outerHTML = res.copied.length ? '<span class="muted small">Copied ✓</span>' : '<span class="muted small">They already have this tune</span>';
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = 'Copy to their library';
+      alert(`Could not share: ${err.message}`);
+    }
+  });
+});
 $('#delete').addEventListener('click', async () => {
   if (!confirm(`Delete “${tune.title}” and its original files from the library?`)) return;
   try {

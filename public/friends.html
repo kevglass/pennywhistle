@@ -12,7 +12,7 @@
 <div id="top"></div>
 <main class="friends-page">
   <h1>Friends</h1>
-  <p class="muted">Friends can see each other’s tunes in their library. They can’t change or delete them.</p>
+  <p class="muted">Friends can see each other’s tunes in their library. They can’t change or delete them. To give a friend tunes of their own, share them: they are copied into the friend’s library.</p>
 
   <section class="card stack">
     <h2>Add a friend</h2>
@@ -54,7 +54,7 @@ function draw({ friends, incoming, sent }) {
   $('#incoming').innerHTML = incoming.map((p) => `<li class="person">${avatar(p)}${who(p)}
     <div class="acts"><button class="btn primary" data-act="accept" data-sub="${esc(p.sub)}">Accept</button><button class="btn" data-act="ignore" data-sub="${esc(p.sub)}">Ignore</button></div></li>`).join('');
   $('#friends').innerHTML = friends.map((p) => `<li class="person">${avatar(p)}${who(p)}
-    <div class="acts"><button class="btn danger" data-act="remove" data-sub="${esc(p.sub)}" data-name="${esc(p.name || p.email)}">Remove</button></div></li>`).join('')
+    <div class="acts"><button class="btn" data-act="share" data-sub="${esc(p.sub)}" data-name="${esc(p.name || p.email)}" title="Copy all your tunes into their library">Share all my tunes</button><button class="btn danger" data-act="remove" data-sub="${esc(p.sub)}" data-name="${esc(p.name || p.email)}">Remove</button></div></li>`).join('')
     || '<li class="muted">No friends yet. Add someone by their email address above.</li>';
   $('#sent-card').hidden = !sent.length;
   $('#sent').innerHTML = sent.map((s) => `<li class="person"><div class="who"><strong>${esc(s.email)}</strong><span class="muted small">Asked ${when(s.at)}</span></div>
@@ -93,9 +93,15 @@ document.addEventListener('click', async (ev) => {
   if (!btn) return;
   const { act, sub, email, name } = btn.dataset;
   if (act === 'remove' && !confirm(`Remove ${name} from your friends? You will no longer see each other’s tunes.`)) return;
+  if (act === 'share' && !confirm(`Copy all your tunes into ${name}’s library? They become ${name}’s own tunes; any they already have are skipped.`)) return;
   btn.disabled = true;
   try {
-    draw(await post(`friends/${act}`, act === 'cancel' ? { email } : { sub }));
+    const res = await post(`friends/${act}`, act === 'cancel' ? { email } : { sub });
+    draw(res);
+    if (act === 'share') {
+      const n = res.copied.length, skipped = res.skipped.length;
+      alert(`${n ? `Copied ${n} tune${n === 1 ? '' : 's'} into ${name}’s library.` : `Nothing new to copy.`}${skipped ? ` ${skipped} ${skipped === 1 ? 'was' : 'were'} already there.` : ''}`);
+    }
   } catch (e) {
     btn.disabled = false;
     alert(e.message);

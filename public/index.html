@@ -60,7 +60,6 @@ const row = (t, owner) => {
 
 // Alphabetical, ignoring case and accents, with "Reel 2" before "Reel 10".
 const byTitle = (a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base', numeric: true });
-const friendName = (f) => f.name || f.email || '';
 
 // Searching covers every tune you can see; a friend's name or email finds all their tunes.
 const matches = (q, t, owner = {}) => !q || [t.title, t.composer, t.key, t.meter, ...(t.chords || []), owner.name, owner.email,
@@ -83,7 +82,8 @@ function draw() {
   if (empty) { $('#list').innerHTML = ''; return; }
   const mine = lib.mine.filter((t) => matches(q, t)).sort(byTitle).map((t) => row(t));
   let html = section('Your tunes', mine, 'You haven’t saved any tunes yet. <a href="editor.html">Create your first tab</a>.', q);
-  for (const f of [...lib.friends].sort((a, b) => friendName(a).localeCompare(friendName(b), undefined, { sensitivity: 'base' }))) {
+  // Friends come in the server's order, which also decides whose copy of a piece they share is listed.
+  for (const f of lib.friends) {
     const shown = f.tunes.filter((t) => matches(q, t, f)).sort(byTitle).map((t) => row(t, f.sub));
     const heading = f.name && f.name !== f.email
       ? `${esc(f.name)} <span class="muted small">${esc(f.email)}</span>` : esc(f.email);

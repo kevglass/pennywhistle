@@ -365,7 +365,9 @@ $('#save').addEventListener('click', async () => {
     const msg = e instanceof TypeError
       ? `the request did not reach the server (${e.message}). Check your connection and try again.`
       : e.message;
+    const dup = e.data?.duplicate; // the same piece is already in the library
     if (e.signIn) $('#save-status').innerHTML = errorHTML(e, '', { newTab: true });
+    else if (dup) $('#save-status').innerHTML = `<span class="error">Not saved: ${esc(msg)}, and a piece is kept only once.</span> <a href="tune.html?id=${encodeURIComponent(dup.id)}" target="_blank" rel="noopener">Open “${esc(dup.title)}”</a>`;
     else alert('Could not save: ' + msg);
     btn.disabled = false;
     btn.textContent = 'Approve & save';

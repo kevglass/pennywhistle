@@ -124,16 +124,22 @@ function summary(array $t): array
     ];
 }
 
-/** Summaries of every tune in a library folder, newest first. */
-function list_tunes(string $tunesDir): array
+/** Every tune in a library folder, newest first. */
+function load_tunes(string $tunesDir): array
 {
     $out = [];
     foreach (glob("$tunesDir/*/tune.json") ?: [] as $file) {
         $t = load_tune($tunesDir, basename(dirname($file)));
-        if ($t) $out[] = summary($t);
+        if ($t) $out[] = $t;
     }
     usort($out, fn ($a, $b) => strcmp((string) $b['updatedAt'], (string) $a['updatedAt']));
     return $out;
+}
+
+/** Summaries of every tune in a library folder, newest first. */
+function list_tunes(string $tunesDir): array
+{
+    return array_map('summary', load_tunes($tunesDir));
 }
 
 /** Send one of a tune's uploaded original files. */
@@ -195,7 +201,19 @@ function tune_record(array $body, ?array $existing): array
         'originals' => $existing['originals'] ?? [],
         'transcription' => $body['transcription'] ?? ($existing['transcription'] ?? null),
         'license' => $existing['license'] ?? null, // set only by the license check
+        'sharedBy' => $existing['sharedBy'] ?? null, // set when a friend copied it into this library
     ], fn ($v) => $v !== null);
+}
+
+/** Each piece is kept once per library: refuse to save $rec if another tune there is the same piece. */
+function refuse_duplicate(string $tunesDir, array $rec): void
+{
+    $piece = piece_of($rec);
+    foreach (load_tunes($tunesDir) as $t) {
+        if ($t['id'] !== ($rec['id'] ?? null) && pieces_match($piece, piece_of($t))) {
+            send_json(409, ['error' => "“{$t['title']}” is already in your library", 'duplicate' => ['id' => $t['id'], 'title' => $t['title']]]);
+        }
+    }
 }
 
 /** tune.abc (the displayed notation) beside tune.json. */
@@ -560,6 +578,7 @@ function handle(): never
         if ($blocked) send_json(403, ['error' => UPLOADS_BLOCKED]);
         $meta = meta_from_request();
         $rec = tune_record($meta, null);
+        refuse_duplicate(TUNES_DIR, $rec);
         $rec['id'] = slug($rec['title']) . '-' . bin2hex(random_bytes(3));
         $dir = TUNES_DIR . '/' . $rec['id'];
         mkdir($dir, 0775, true);
@@ -580,6 +599,7 @@ function handle(): never
     if ($action === '' && $method === 'POST') { // update (POST for compatibility with simple hosts)
         $meta = meta_from_request();
         $rec = tune_record($meta, $existing);
+        refuse_duplicate(TUNES_DIR, $rec);
         $new = save_originals($dir);
         if ($new) {
             foreach ($existing['originals'] as $o) if (!in_array($o['file'], array_column($new, 'file'), true)) @unlink("$dir/{$o['file']}");
