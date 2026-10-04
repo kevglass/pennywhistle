@@ -238,6 +238,84 @@ function send_friend_email(array $from, string $to): bool
     return $ok;
 }
 
+/** Whether a license check found the tune free to use (public domain, or a license with no conditions). */
+function is_public_domain(array $tune): bool
+{
+    return ($tune['license']['status'] ?? '') === 'free';
+}
+
+function public_domain_file(): string
+{
+    return DATA_ROOT . '/public-domain.json';
+}
+
+/**
+ * Every free-to-use piece in anyone's library, once each (its most recently updated copy):
+ * {"tunes": [{"owner", "piece", "summary"}]}. Reading every library is slow, so the list is
+ * kept in public-domain.json and rebuilt only after forget_public_domain().
+ */
+function public_domain_pieces(): array
+{
+    $cached = read_json_file(public_domain_file(), []);
+    if (is_array($cached['tunes'] ?? null)) return $cached['tunes'];
+    $free = [];
+    foreach (glob(DATA_ROOT . '/users/*/tunes/*/tune.json') ?: [] as $file) {
+        $t = json_decode((string) file_get_contents($file), true);
+        if (is_array($t) && isset($t['id'], $t['title'], $t['createdAt'], $t['updatedAt']) && is_public_domain($t)) {
+            $free[] = [basename(dirname($file, 3)), $t];
+        }
+    }
+    usort($free, fn ($a, $b) => strcmp((string) $b[1]['updatedAt'], (string) $a[1]['updatedAt']));
+    $tunes = [];
+    foreach ($free as [$owner, $t]) {
+        $piece = piece_of($t);
+        foreach ($tunes as $x) if (pieces_match($piece, $x['piece'])) continue 2;
+        $tunes[] = ['owner' => $owner, 'piece' => $piece, 'summary' => ['hasOriginal' => false] + summary($t)];
+    }
+    ensure_dir(DATA_ROOT);
+    write_json_atomic(public_domain_file(), ['builtAt' => gmdate('Y-m-d\TH:i:s\Z'), 'tunes' => $tunes]);
+    return $tunes;
+}
+
+/** Drop the cached public domain list, so the next library load rebuilds it (after a license is found, or a free tune changes). */
+function forget_public_domain(): void
+{
+    @unlink(public_domain_file());
+}
+
+/**
+ * The public domain section of $sub's library: the free-to-use pieces, leaving out any piece
+ * already in their own or their friends' libraries. Each summary carries its owner's account id.
+ */
+function public_domain_tunes(string $sub, array $friendSubs): array
+{
+    $shown = [];
+    foreach ([$sub, ...$friendSubs] as $s) {
+        foreach (glob(user_dir($s) . '/tunes/*/tune.json') ?: [] as $file) {
+            $t = json_decode((string) file_get_contents($file), true);
+            if (is_array($t)) $shown[] = piece_of($t);
+        }
+    }
+    $out = [];
+    foreach (public_domain_pieces() as $x) {
+        if ($x['owner'] === $sub || in_array($x['owner'], $friendSubs, true)) continue;
+        foreach ($shown as $piece) if (pieces_match($x['piece'], $piece)) continue 2;
+        $out[] = ['owner' => $x['owner']] + $x['summary'];
+    }
+    return $out;
+}
+
+/**
+ * Another user's tune that $user may read: a friend's, or one found to be public domain.
+ * Null (send a 404) for anything else, so other tunes can't be probed for.
+ */
+function readable_tune(array $user, string $owner, string $id): ?array
+{
+    if (!valid_sub($owner)) return null;
+    $tune = load_tune(user_dir($owner) . '/tunes', $id);
+    return $tune && (is_friend($user['sub'], $owner) || is_public_domain($tune)) ? $tune : null;
+}
+
 /** Routes under friends/ and library. Returns only by sending a response. */
 function handle_friends(array $user, array $parts, string $method): never
 {
@@ -246,31 +324,37 @@ function handle_friends(array $user, array $parts, string $method): never
         foreach (friends_overview($user)['friends'] as $f) {
             $friends[] = $f + ['tunes' => list_tunes(user_dir($f['sub']) . '/tunes')];
         }
-        send_json(200, ['mine' => list_tunes(user_dir($user['sub']) . '/tunes'), 'friends' => $friends]);
+        send_json(200, [
+            'mine' => list_tunes(user_dir($user['sub']) . '/tunes'),
+            'friends' => $friends,
+            'publicDomain' => public_domain_tunes($user['sub'], array_column($friends, 'sub')),
+        ]);
     }
 
     $action = $parts[1] ?? '';
     if ($action === '' && $method === 'GET') send_json(200, friends_overview($user));
 
-    // A friend's tune, read-only: friends/<sub>/tunes/<id>[/files/<file>]
+    // Someone else's tune, read-only: friends/<sub>/tunes/<id>[/files/<file>]. Public domain tunes
+    // from people who aren't friends come without the uploader's name or their uploaded files.
     if (($parts[2] ?? '') === 'tunes' && isset($parts[3]) && $method === 'GET') {
         $owner = $action;
-        if (!valid_sub($owner) || !is_friend($user['sub'], $owner)) send_json(404, ['error' => 'Tune not found']);
-        $dir = user_dir($owner) . '/tunes';
-        $tune = load_tune($dir, $parts[3]);
+        $tune = readable_tune($user, $owner, $parts[3]);
         if (!$tune) send_json(404, ['error' => 'Tune not found']);
+        if (!is_friend($user['sub'], $owner)) {
+            if (($parts[4] ?? '') !== '') send_json(404, ['error' => 'File not found']);
+            send_json(200, ['originals' => [], 'owner' => ['sub' => $owner], 'publicDomain' => true] + $tune);
+        }
+        $dir = user_dir($owner) . '/tunes';
         if (($parts[4] ?? '') === 'files' && isset($parts[5])) serve_original("$dir/{$tune['id']}", $tune, $parts[5]);
         send_json(200, $tune + ['owner' => user_info($owner)]);
     }
 
-    // Friends may check the license of each other's tunes: only the license is saved to the tune.
+    // License checks on friends' and public domain tunes: only the license is saved to the tune.
     if (($parts[2] ?? '') === 'tunes' && isset($parts[3]) && ($parts[4] ?? '') === 'license' && $method === 'POST') {
         $owner = $action;
-        if (!valid_sub($owner) || !is_friend($user['sub'], $owner)) send_json(404, ['error' => 'Tune not found']);
-        $dir = user_dir($owner) . '/tunes';
-        $tune = load_tune($dir, $parts[3]);
+        $tune = readable_tune($user, $owner, $parts[3]);
         if (!$tune) send_json(404, ['error' => 'Tune not found']);
-        license_check("$dir/{$tune['id']}", $tune, $user);
+        license_check(user_dir($owner) . "/tunes/{$tune['id']}", $tune, $user);
     }
 
     if ($method !== 'POST') send_json(405, ['error' => 'Method not allowed']);

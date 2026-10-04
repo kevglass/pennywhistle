@@ -190,12 +190,22 @@ function similar_openings(array $a, array $b): bool
  */
 function same_piece(array $a, array $b): bool
 {
-    $title = piece_words((string) ($a['title'] ?? ''));
-    if ($title === '' || $title !== piece_words((string) ($b['title'] ?? ''))) return false;
-    $ca = piece_words((string) ($a['composer'] ?? ''));
-    $cb = piece_words((string) ($b['composer'] ?? ''));
-    if ($ca !== '' && $cb !== '' && $ca !== $cb) return false;
-    $sa = opening_steps($a);
-    $sb = opening_steps($b);
-    return !$sa || !$sb || similar_openings($sa, $sb);
+    return pieces_match(piece_of($a), piece_of($b));
+}
+
+/** What same_piece compares, small enough to keep in a cache: the title and composer words and the opening steps. */
+function piece_of(array $tune): array
+{
+    return [
+        'title' => piece_words((string) ($tune['title'] ?? '')),
+        'composer' => piece_words((string) ($tune['composer'] ?? '')),
+        'steps' => opening_steps($tune),
+    ];
+}
+
+function pieces_match(array $a, array $b): bool
+{
+    if ($a['title'] === '' || $a['title'] !== $b['title']) return false;
+    if ($a['composer'] !== '' && $b['composer'] !== '' && $a['composer'] !== $b['composer']) return false;
+    return !$a['steps'] || !$b['steps'] || similar_openings($a['steps'], $b['steps']);
 }

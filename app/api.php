@@ -376,6 +376,7 @@ function save_license(string $file, array $license): bool
     if (!is_array($current)) return false;
     $current['license'] = $license;
     write_json_atomic($file, $current);
+    forget_public_domain();
     return true;
 }
 
@@ -586,11 +587,13 @@ function handle(): never
         }
         save_side_files($dir, $rec, $meta);
         write_json_atomic("$dir/tune.json", $rec);
+        if (is_public_domain($rec)) forget_public_domain(); // its title or notes may have changed
         send_json(200, $rec);
     }
     if ($action === 'delete' && $method === 'POST') {
         foreach (glob("$dir/{,.}*", GLOB_BRACE) ?: [] as $f) if (is_file($f)) unlink($f);
         rmdir($dir);
+        if (is_public_domain($existing)) forget_public_domain();
         send_json(200, ['ok' => true]);
     }
     send_json(405, ['error' => 'Method not allowed']);

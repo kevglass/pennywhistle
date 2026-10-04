@@ -74,7 +74,7 @@ import { $, api, esc, topbar, renderNow, renderChordList, originalSources, tabSt
 $('#top').insertAdjacentHTML('afterbegin', topbar());
 const params = new URLSearchParams(location.search);
 const id = params.get('id');
-const owner = params.get('owner'); // set for a friend's tune, which is read-only
+const owner = params.get('owner'); // set for a friend's or a public domain tune, which is read-only
 
 const view = new TabView($('#tab'), {
   onSelect: (item, i, ctx) => {
@@ -137,7 +137,8 @@ try {
   $('#title').textContent = tune.title;
   const t = tune.tab || {};
   $('#meta').innerHTML = [
-    tune.owner && `<span class="badge accent">From ${esc(tune.owner.name || tune.owner.email)}’s library</span>`,
+    tune.publicDomain ? '<span class="badge accent">Public domain</span>'
+      : tune.owner && `<span class="badge accent">From ${esc(tune.owner.name || tune.owner.email)}’s library</span>`,
     tune.composer && `<span class="badge">${esc(tune.composer)}</span>`,
     t.key && `<span class="badge accent">Key ${esc(t.key)}</span>`,
     t.meter && `<span class="badge">${esc(t.meter)}</span>`,

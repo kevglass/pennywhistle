@@ -14,7 +14,7 @@
   <div class="lib-head">
     <div>
       <h1>Tune library</h1>
-      <p class="muted" style="margin:0">Your approved penny whistle (D) tabs, and your <a href="friends.html">friends’</a> tunes.</p>
+      <p class="muted" style="margin:0">Your approved penny whistle (D) tabs, your <a href="friends.html">friends’</a> tunes, and public domain tunes shared by everyone.</p>
     </div>
     <div class="row">
       <input type="search" id="q" placeholder="Search title, key, chord…" aria-label="Search tunes">
@@ -31,7 +31,7 @@
 <script type="module">
 import { $, api, esc, errorHTML, loginUrl, topbar, tuneHref, licenseBadge, checkLicense, showLicenseDialog, LICENSE_STATUS } from './js/ui.js';
 $('#top').innerHTML = topbar('library');
-let lib = { mine: [], friends: [] };
+let lib = { mine: [], friends: [], publicDomain: [] };
 let loaded = false;
 let canCheck = false; // this account may run license checks
 const checking = new Set(); // ids of tunes whose license is being checked
@@ -77,8 +77,8 @@ function section(heading, tunes, emptyText, q) {
 
 function draw() {
   const q = $('#q').value.trim().toLowerCase();
-  const total = lib.mine.length + lib.friends.reduce((n, f) => n + f.tunes.length, 0);
-  const empty = !lib.mine.length && !lib.friends.length;
+  const total = lib.mine.length + lib.friends.reduce((n, f) => n + f.tunes.length, 0) + lib.publicDomain.length;
+  const empty = !lib.mine.length && !lib.friends.length && !lib.publicDomain.length;
   $('#empty').hidden = !empty;
   if (empty) { $('#list').innerHTML = ''; return; }
   const mine = lib.mine.filter((t) => matches(q, t)).sort(byTitle).map((t) => row(t));
@@ -89,12 +89,16 @@ function draw() {
       ? `${esc(f.name)} <span class="muted small">${esc(f.email)}</span>` : esc(f.email);
     html += section(heading, shown, 'No tunes yet.', q);
   }
+  // Free-to-use tunes from everyone else, minus any piece already listed above (the server leaves those out).
+  const pd = lib.publicDomain.filter((t) => matches(q, t, { name: 'public domain' })).sort(byTitle).map((t) => row(t, t.owner));
+  if (pd.length) html += section('Public domain <span class="muted small">free-to-use tunes shared by everyone</span>', pd, '', q);
   $('#list').innerHTML = html || (total ? '<p class="muted">No tunes match your search.</p>' : '');
 }
 $('#q').addEventListener('input', draw);
 // The whole row opens the tune; the title link keeps it keyboard- and middle-click-friendly.
 // A tune in the library by id (and owner, for a friend's tune).
-const findTune = (id, owner) => (owner ? lib.friends.find((f) => f.sub === owner)?.tunes : lib.mine)?.find((x) => x.id === id);
+const findTune = (id, owner) => (owner ? lib.friends.find((f) => f.sub === owner)?.tunes : lib.mine)?.find((x) => x.id === id)
+  || (owner && lib.publicDomain.find((x) => x.owner === owner && x.id === id));
 
 $('#list').addEventListener('click', async (e) => {
   const badge = e.target.closest('.show-license');
@@ -129,7 +133,7 @@ $('#list').addEventListener('click', async (e) => {
   if (tr && !e.target.closest('a') && !getSelection().toString()) location.href = tr.dataset.href;
 });
 api('config').then((c) => { canCheck = !!c.licenseCheck; if (loaded) draw(); }).catch(() => {});
-try { lib = await api('library'); loaded = true; draw(); }
+try { lib = { publicDomain: [], ...(await api('library')) }; loaded = true; draw(); }
 catch (e) { $('#list').innerHTML = `<p>${errorHTML(e, 'Could not load the library')}</p>`; }
 </script>
 </body>
