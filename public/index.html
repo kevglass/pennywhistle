@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Penny Whistle Tabs</title>
 <script>try{if(localStorage.getItem('pw-theme')==='dark')document.documentElement.dataset.theme='dark'}catch(e){}</script>
+<script>document.documentElement.classList.add('auth-pending')</script>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/app.css">
 </head>
@@ -59,7 +60,32 @@ const row = (t, owner) => {
 };
 
 // Alphabetical, ignoring case and accents, with "Reel 2" before "Reel 10".
-const byTitle = (a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base', numeric: true });
+const text = (a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+const byTitle = (a, b) => text(a.title || '', b.title || '');
+
+// The table columns, and the value each sorts by (null: blank, always listed last).
+const LICENSE_ORDER = ['free', 'attribution', 'restricted', 'unknown'];
+const COLUMNS = [
+  { id: 'title', label: 'Title', value: (t) => t.title || null },
+  { id: 'key', label: 'Key', value: (t) => t.key || null },
+  { id: 'meter', label: 'Meter', cls: 'wide-only', value: (t) => t.meter || null },
+  { id: 'bars', label: 'Bars', cls: 'num', value: (t) => t.measures ?? null },
+  { id: 'license', label: 'License', value: (t) => (t.license ? LICENSE_ORDER.indexOf(t.license.status) : null) },
+  { id: 'chords', label: 'Chords', cls: 'wide-only', value: (t) => t.chords?.length || null },
+  { id: 'updated', label: 'Updated', cls: 'wide-only', value: (t) => t.updatedAt || null },
+];
+// Every table follows the same sort; clicking a heading sorts by it, clicking again reverses it.
+const SORT_KEY = 'pw-library-sort';
+let sort = { by: 'title', desc: false };
+try { sort = { ...sort, ...JSON.parse(localStorage.getItem(SORT_KEY)) }; } catch { /* storage blocked or empty */ }
+if (!COLUMNS.some((c) => c.id === sort.by)) sort = { by: 'title', desc: false };
+function bySort(a, b) {
+  const { value } = COLUMNS.find((c) => c.id === sort.by);
+  const va = value(a), vb = value(b);
+  if (va === null || vb === null) return va === vb ? byTitle(a, b) : va === null ? 1 : -1;
+  const d = typeof va === 'number' ? va - vb : text(va, vb);
+  return (sort.desc ? -d : d) || byTitle(a, b);
+}
 
 // Searching covers every tune you can see; a friend's name or email finds all their tunes.
 const matches = (q, t, owner = {}) => !q || [t.title, t.composer, t.key, t.meter, ...(t.chords || []), owner.name, owner.email,
@@ -70,7 +96,10 @@ function section(heading, tunes, emptyText, q) {
   if (q && !tunes.length) return '';
   return `<section class="lib-section"><h2>${heading}</h2>
     ${tunes.length ? `<div class="tune-table-wrap"><table class="tune-table">
-      <thead><tr><th>Title</th><th>Key</th><th class="wide-only">Meter</th><th class="num">Bars</th><th>License</th><th class="wide-only">Chords</th><th class="wide-only">Updated</th></tr></thead>
+      <thead><tr>${COLUMNS.map((c) => {
+        const on = c.id === sort.by, dir = sort.desc ? 'descending' : 'ascending';
+        return `<th class="${c.cls || ''}"${on ? ` aria-sort="${dir}"` : ''}><button class="sort${on ? ' on' : ''}" type="button" data-sort="${c.id}" title="Sort by ${c.label.toLowerCase()}">${c.label}<span class="arrow" aria-hidden="true">${on ? (sort.desc ? '▼' : '▲') : ''}</span></button></th>`;
+      }).join('')}</tr></thead>
       <tbody>${tunes.join('')}</tbody></table></div>` : `<p class="muted">${emptyText}</p>`}</section>`;
 }
 
@@ -80,17 +109,17 @@ function draw() {
   const empty = !lib.mine.length && !lib.friends.length && !lib.publicDomain.length;
   $('#empty').hidden = !empty;
   if (empty) { $('#list').innerHTML = ''; return; }
-  const mine = lib.mine.filter((t) => matches(q, t)).sort(byTitle).map((t) => row(t));
+  const mine = lib.mine.filter((t) => matches(q, t)).sort(bySort).map((t) => row(t));
   let html = section('Your tunes', mine, 'You haven’t saved any tunes yet. <a href="editor.html">Create your first tab</a>.', q);
   // Friends come in the server's order, which also decides whose copy of a piece they share is listed.
   for (const f of lib.friends) {
-    const shown = f.tunes.filter((t) => matches(q, t, f)).sort(byTitle).map((t) => row(t, f.sub));
+    const shown = f.tunes.filter((t) => matches(q, t, f)).sort(bySort).map((t) => row(t, f.sub));
     const heading = f.name && f.name !== f.email
       ? `${esc(f.name)} <span class="muted small">${esc(f.email)}</span>` : esc(f.email);
     html += section(heading, shown, f.hidden ? 'No tunes you haven’t already got access to.' : 'No tunes yet.', q);
   }
   // Free-to-use tunes from everyone else, minus any piece already listed above (the server leaves those out).
-  const pd = lib.publicDomain.filter((t) => matches(q, t, { name: 'public domain' })).sort(byTitle).map((t) => row(t, t.owner));
+  const pd = lib.publicDomain.filter((t) => matches(q, t, { name: 'public domain' })).sort(bySort).map((t) => row(t, t.owner));
   if (pd.length) html += section('Public domain <span class="muted small">free-to-use tunes shared by everyone</span>', pd, '', q);
   $('#list').innerHTML = html || (total ? '<p class="muted">No tunes match your search.</p>' : '');
 }
@@ -101,6 +130,15 @@ const findTune = (id, owner) => (owner ? lib.friends.find((f) => f.sub === owner
   || (owner && lib.publicDomain.find((x) => x.owner === owner && x.id === id));
 
 $('#list').addEventListener('click', async (e) => {
+  const head = e.target.closest('button[data-sort]');
+  if (head) {
+    const by = head.dataset.sort;
+    sort = { by, desc: by === sort.by && !sort.desc };
+    try { localStorage.setItem(SORT_KEY, JSON.stringify(sort)); } catch { /* storage blocked */ }
+    draw();
+    document.querySelector(`button[data-sort="${by}"]`)?.focus();
+    return;
+  }
   const badge = e.target.closest('.show-license');
   if (badge) {
     const { id, owner } = badge.closest('td').dataset;

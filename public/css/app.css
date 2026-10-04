@@ -38,6 +38,8 @@ h2 { font-size: 1.15rem; }
 .muted { color: var(--muted); }
 .small { font-size: .85rem; }
 [hidden] { display: none !important; }
+/* App pages stay blank until the sign-in check passes, so signed-out visitors only ever see the login page. */
+.auth-pending body { visibility: hidden; }
 
 /* ---------- top bar */
 /* #top holds the top bar (and the player on tune pages) and stays fixed to the top of the screen.
@@ -83,6 +85,10 @@ label { font-size: .88rem; color: var(--muted); }
 .tune-table td a { color: inherit; font-weight: 600; text-decoration: none; }
 .tune-table td a:hover { color: var(--accent); text-decoration: underline; }
 .tune-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.tune-table th .sort { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.tune-table th .sort:hover, .tune-table th .sort.on { color: var(--ink); }
+.tune-table th .sort:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+.tune-table th .arrow { font-size: .65rem; min-width: .7em; }
 .tune-table td.small { padding-top: 11px; }
 .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .badge { font-size: .75rem; padding: 2px 8px; border-radius: 99px; background: var(--surface-2); color: var(--muted); }

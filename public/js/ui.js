@@ -49,12 +49,16 @@ export async function signOut() {
   location.href = 'login.html';
 }
 
+/** App pages start hidden (class auth-pending, set in their head) until the user is known to be signed in. */
+const reveal = () => document.documentElement.classList.remove('auth-pending');
+
 // Fill the topbar's account menu once the signed-in user is known (redirects to sign-in if not).
 async function showUser() {
   const el = document.getElementById('account');
-  if (!el) return;
+  if (!el) return reveal();
   try {
     const u = await api('auth/me');
+    reveal();
     el.hidden = false;
     el.querySelector('summary').innerHTML = u.picture
       ? `<img class="avatar" src="${esc(u.picture)}" alt="" referrerpolicy="no-referrer" width="22" height="22">`
@@ -70,7 +74,8 @@ async function showUser() {
     }
     if (u.admin) el.querySelector('#friends-link').insertAdjacentHTML('afterend', '<a class="btn" href="users.html">Users</a>');
   } catch (e) {
-    if (e.signIn) location.replace(loginUrl()); // every page with a topbar needs a signed-in user
+    if (e.signIn) location.replace(loginUrl()); // every page with a topbar needs a signed-in user; it stays hidden
+    else reveal(); // the server couldn't be reached: show the page, whose own requests will say so
   }
 }
 document.addEventListener('click', (e) => { if (e.target.closest('#sign-out')) signOut(); });
