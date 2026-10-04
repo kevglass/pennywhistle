@@ -386,9 +386,24 @@ $('#save').addEventListener('click', async () => {
     }
   } catch { window.__canTranscribe = false; }
 
-  if (!editId && (await api('auth/me').catch(() => ({}))).uploadsBlocked) {
+  const me = editId ? {} : await api('auth/me').catch(() => ({}));
+  if (me.uploadsBlocked) {
     document.querySelectorAll('.step').forEach((el) => { el.hidden = true; });
-    $('#heading').parentElement.insertAdjacentHTML('afterend', '<section class="card"><p class="error" style="margin:0">Adding new tunes has been turned off for your account. Ask the site owner to turn it back on.</p></section>');
+    const requested = (at) => `<p class="muted" style="margin:0">You asked for upload access on ${new Date(at).toLocaleDateString()}. The site owner has been emailed and will review it.</p>`;
+    $('#heading').parentElement.insertAdjacentHTML('afterend', `<section class="card stack" id="upload-access">
+      <p style="margin:0">Adding new tunes is turned off for your account. You can still open, edit and delete the tunes you have.</p>
+      ${me.uploadRequestedAt ? requested(me.uploadRequestedAt) : '<div><button class="btn primary" id="request-uploads" type="button">Request upload access</button></div>'}
+    </section>`);
+    $('#request-uploads')?.addEventListener('click', async (e) => {
+      e.target.disabled = true;
+      try {
+        const { requestedAt } = await api('auth/upload-request', { method: 'POST' });
+        e.target.parentElement.outerHTML = requested(requestedAt);
+      } catch (err) {
+        e.target.disabled = false;
+        alert(err.message);
+      }
+    });
     return;
   }
 

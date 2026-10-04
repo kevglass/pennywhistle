@@ -12,7 +12,13 @@
 <div id="top"></div>
 <main class="friends-page">
   <h1>Users</h1>
-  <p class="muted">Everyone who has signed in, and how many tunes they have saved. Blocking someone stops them adding new tunes (and reading music with Claude); they can still open, edit and delete the tunes they have.</p>
+  <p class="muted">Everyone who has signed in, and how many tunes they have saved. Blocking someone stops them adding new tunes (and reading music with Claude); they can still open, edit and delete the tunes they have, and can ask you for upload access, which emails you.</p>
+
+  <section class="card stack">
+    <h2>Uploads</h2>
+    <label class="check"><input type="checkbox" id="default-allowed" disabled> Let accounts add tunes unless you block them</label>
+    <p class="muted small" style="margin:0">Turned off, new accounts (and any you haven’t allowed or blocked yourself) can’t add tunes until you allow them.</p>
+  </section>
 
   <section class="card stack">
     <h2 id="count">Registered users</h2>
@@ -28,16 +34,21 @@ const avatar = (p) => (p.picture
   : `<span class="avatar">${esc((p.name || p.email || '?').trim().charAt(0).toUpperCase())}</span>`);
 const when = (iso) => (iso ? new Date(iso).toLocaleDateString() : 'never');
 
-function draw(users) {
+function draw({ uploadsBlockedByDefault, users }) {
+  $('#default-allowed').checked = !uploadsBlockedByDefault;
+  $('#default-allowed').disabled = false;
   const tunes = users.reduce((n, u) => n + u.tunes, 0);
   $('#count').textContent = `${users.length} registered user${users.length === 1 ? '' : 's'} · ${tunes} tune${tunes === 1 ? '' : 's'}`;
+  const set = (u, blocked, label, cls) => `<button class="btn ${cls}" data-sub="${esc(u.sub)}" data-blocked="${blocked}">${label}</button>`;
   $('#users').innerHTML = users.map((u) => `<li class="person">${avatar(u)}
     <div class="who"><strong>${esc(u.name || u.email)}${u.admin ? ' <span class="badge accent">Admin</span>' : ''}</strong>
       <span class="muted small">${esc(u.email)}</span>
       <span class="small"><strong>${u.tunes}</strong> tune${u.tunes === 1 ? '' : 's'}${u.lastTuneAt ? ` · last saved ${when(u.lastTuneAt)}` : ''} · signed in ${when(u.lastLogin)}</span></div>
     <div class="acts">${u.uploadsBlocked
-      ? `<span class="badge lic lic-restricted">Blocked</span><button class="btn primary" data-sub="${esc(u.sub)}" data-blocked="false">Allow uploads</button>`
-      : `<span class="badge lic lic-free">Allowed</span><button class="btn danger" data-sub="${esc(u.sub)}" data-blocked="true">Block uploads</button>`}</div></li>`).join('')
+      ? (u.requestedAt
+        ? `<span class="badge accent">Asked for access ${when(u.requestedAt)}</span>${set(u, false, 'Allow uploads', 'primary')}${set(u, true, 'Decline', '')}`
+        : `<span class="badge lic lic-restricted" title="${u.uploadsDefault ? 'Blocked by the site default' : ''}">Blocked${u.uploadsDefault ? ' (default)' : ''}</span>${set(u, false, 'Allow uploads', 'primary')}`)
+      : `<span class="badge lic lic-free" title="${u.uploadsDefault ? 'Allowed by the site default' : ''}">Allowed${u.uploadsDefault ? ' (default)' : ''}</span>${set(u, true, 'Block uploads', 'danger')}`}</div></li>`).join('')
     || '<li class="muted">Nobody has signed in yet.</li>';
 }
 
@@ -49,6 +60,18 @@ document.addEventListener('click', async (ev) => {
     draw(await api(`admin/users/${btn.dataset.sub}/uploads`, { method: 'POST', body: JSON.stringify({ blocked: btn.dataset.blocked === 'true' }) }));
   } catch (e) {
     btn.disabled = false;
+    alert(e.message);
+  }
+});
+
+$('#default-allowed').addEventListener('change', async (ev) => {
+  const box = ev.target;
+  box.disabled = true;
+  try {
+    draw(await api('admin/settings', { method: 'POST', body: JSON.stringify({ uploadsBlockedByDefault: !box.checked }) }));
+  } catch (e) {
+    box.checked = !box.checked;
+    box.disabled = false;
     alert(e.message);
   }
 });

@@ -401,7 +401,7 @@ function save_license(string $file, array $license): bool
 // ------------------------------------------------------------------ auth (Google sign-in)
 
 const SESSION_DAYS = 30;
-const UPLOADS_BLOCKED = 'Adding new tunes has been turned off for your account. Ask the site owner to turn it back on.';
+const UPLOADS_BLOCKED = 'Adding new tunes is turned off for your account. You can ask the site owner for access on the new tab page.';
 
 /** Session cookie for the API folder only; sessions are files under DATA_DIR/sessions. */
 function start_session(): void
@@ -560,7 +560,8 @@ function handle(): never
     $user = current_user();
     if (!$user) send_json(401, ['error' => 'Please sign in', 'login' => true]);
     $blocked = uploads_blocked($user['sub']);
-    if ($route === 'auth/me' && $method === 'GET') send_json(200, $user + ['friendRequests' => friend_request_count($user), 'admin' => is_admin($user), 'uploadsBlocked' => $blocked]);
+    if ($route === 'auth/me' && $method === 'GET') send_json(200, $user + ['friendRequests' => friend_request_count($user), 'admin' => is_admin($user), 'uploadsBlocked' => $blocked, 'uploadRequestedAt' => $blocked ? upload_requested_at($user['sub']) : null]);
+    if ($route === 'auth/upload-request' && $method === 'POST') send_json(200, request_upload_access($user));
     if ($route === 'transcribe' && $method === 'POST') {
         if ($blocked) send_json(403, ['error' => UPLOADS_BLOCKED]);
         transcribe();

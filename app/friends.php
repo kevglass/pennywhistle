@@ -217,6 +217,19 @@ function site_url(): string
     return ($https ? 'https' : 'http') . "://$host" . rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/', 2), '/');
 }
 
+/** Send a plain-text email from MAIL_FROM (PHP's mail()). */
+function send_mail(string $to, string $subject, string $body): bool
+{
+    $sender = env('MAIL_FROM', 'noreply@' . preg_replace('/^www\./', '', (string) ($_SERVER['SERVER_NAME'] ?? 'localhost')));
+    $headers = [
+        'From' => 'Penny Whistle Tabs <' . trim((string) preg_replace('/[\r\n]+/', ' ', $sender)) . '>',
+        'MIME-Version' => '1.0',
+        'Content-Type' => 'text/plain; charset=UTF-8',
+        'Content-Transfer-Encoding' => '8bit',
+    ];
+    return @mail($to, mb_encode_mimeheader($subject, 'UTF-8'), $body, $headers);
+}
+
 function send_friend_email(array $from, string $to): bool
 {
     $oneLine = fn (string $s) => trim((string) preg_replace('/[\r\n]+/', ' ', $s));
@@ -226,14 +239,7 @@ function send_friend_email(array $from, string $to): bool
         . "$who would like to be friends on Penny Whistle Tabs. Friends can see each other's tune libraries.\n\n"
         . "To accept or ignore the request, sign in with Google as $to and open your friends page:\n"
         . site_url() . "/friends.html\n";
-    $sender = env('MAIL_FROM', 'noreply@' . preg_replace('/^www\./', '', (string) ($_SERVER['SERVER_NAME'] ?? 'localhost')));
-    $headers = [
-        'From' => 'Penny Whistle Tabs <' . $oneLine($sender) . '>',
-        'MIME-Version' => '1.0',
-        'Content-Type' => 'text/plain; charset=UTF-8',
-        'Content-Transfer-Encoding' => '8bit',
-    ];
-    $ok = @mail($to, mb_encode_mimeheader($subject, 'UTF-8'), $body, $headers);
+    $ok = send_mail($to, $subject, $body);
     if (!$ok) error_log("friend request email to $to could not be sent");
     return $ok;
 }
