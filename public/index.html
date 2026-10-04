@@ -87,7 +87,7 @@ function draw() {
     const shown = f.tunes.filter((t) => matches(q, t, f)).sort(byTitle).map((t) => row(t, f.sub));
     const heading = f.name && f.name !== f.email
       ? `${esc(f.name)} <span class="muted small">${esc(f.email)}</span>` : esc(f.email);
-    html += section(heading, shown, 'No tunes yet.', q);
+    html += section(heading, shown, f.hidden ? 'No tunes you haven’t already got access to.' : 'No tunes yet.', q);
   }
   // Free-to-use tunes from everyone else, minus any piece already listed above (the server leaves those out).
   const pd = lib.publicDomain.filter((t) => matches(q, t, { name: 'public domain' })).sort(byTitle).map((t) => row(t, t.owner));

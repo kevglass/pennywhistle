@@ -366,13 +366,19 @@ function handle_friends(array $user, array $parts, string $method): never
         $friends = [];
         foreach (friends_overview($user)['friends'] as $f) {
             $tunes = [];
+            $hidden = 0; // tunes left out as already listed
             foreach (load_tunes(user_dir($f['sub']) . '/tunes') as $t) {
                 $piece = piece_of($t);
-                foreach ($shown as $s) if (pieces_match($piece, $s)) continue 2;
+                foreach ($shown as $s) {
+                    if (pieces_match($piece, $s)) {
+                        $hidden++;
+                        continue 2;
+                    }
+                }
                 $shown[] = $piece;
                 $tunes[] = summary($t);
             }
-            $friends[] = $f + ['tunes' => $tunes];
+            $friends[] = $f + ['tunes' => $tunes, 'hidden' => $hidden];
         }
         send_json(200, [
             'mine' => array_map('summary', $mine),
