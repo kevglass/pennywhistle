@@ -237,7 +237,7 @@ function send_friend_email(array $from, string $to): bool
     $subject = "$who sent you a friend request on Penny Whistle Tabs";
     $body = "Hello,\n\n"
         . "$who would like to be friends on Penny Whistle Tabs. Friends can see each other's tune libraries.\n\n"
-        . "To accept or ignore the request, sign in with Google as $to and open your friends page:\n"
+        . "To accept or ignore the request, sign in as $to (with Google, or sign up with this email address) and open your friends page:\n"
         . site_url() . "/friends.html\n";
     $ok = send_mail($to, $subject, $body);
     if (!$ok) error_log("friend request email to $to could not be sent");

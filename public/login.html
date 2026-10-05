@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sign in · Penny Whistle Tabs</title>
 <script>try{if(localStorage.getItem('pw-theme')==='dark')document.documentElement.dataset.theme='dark'}catch(e){}</script>
+<script>
+// Emailed links carry a one-time token: take it out of the address bar (and so out of any Referer) before anything loads.
+{ const q = new URLSearchParams(location.search); for (const k of ['verify', 'reset']) if (q.has(k)) { window.pwToken = { kind: k, token: q.get(k) }; q.delete(k); history.replaceState(null, '', location.pathname + (q.size ? `?${q}` : '')); } }
+</script>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/app.css">
 <script src="https://accounts.google.com/gsi/client" async></script>
@@ -13,7 +17,19 @@
   .login > svg { width: 56px; height: 56px; }
   .login h1 { margin: 8px 0 4px; }
   .login .card { margin-top: 24px; padding: 28px 20px; display: grid; justify-items: center; gap: 14px; }
+  .login .notice { margin: 20px 0 0; line-height: 1.5; }
   #google-button { min-height: 44px; }
+  #google-button:empty { display: none; }
+  .login form { display: grid; gap: 12px; width: 100%; text-align: left; }
+  .login form .btn.primary { justify-content: center; }
+  .login form h2 { margin: 0; font-size: 1.05rem; text-align: center; }
+  .login .or { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0; }
+  .login .or[hidden] { display: none; }
+  .login .or::before, .login .or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+  .login .links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+  .login .links:has(> :only-child) { justify-content: center; }
+  .spam-note { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); font-size: .88rem; line-height: 1.45; }
+  .linkbtn { font: inherit; font-size: .88rem; background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -24,8 +40,11 @@
   <div class="card">
     <p style="margin:0">Sign in to see your tune library.</p>
     <div id="google-button"></div>
+    <p class="or muted small" id="or" hidden>or</p>
+    <div id="form" style="width:100%"></div>
     <div id="status" class="status" aria-live="polite"></div>
   </div>
+  <p class="muted small notice">Penny Whistle Tabs is free for everyone, always, and is provided as-is with no warranty. It’s here in the hope that it encourages more people to learn to play the penny whistle.</p>
 </main>
 <script type="module">
 // Standalone on purpose: no app modules are needed to sign in.
@@ -34,7 +53,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 async function api(route, opts = {}) {
   const res = await fetch(`api/index.php?r=${route}`, { ...opts, headers: opts.body ? { 'Content-Type': 'application/json' } : {} });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  if (!res.ok) throw Object.assign(new Error(data.error || `Request failed (${res.status})`), { data });
   return data;
 }
 
@@ -43,45 +62,166 @@ const params = new URLSearchParams(location.search);
 const next = params.get('next') || '';
 const target = /^[a-z0-9-]+\.html(\?[^#]*)?$/i.test(next) ? next : './';
 const say = (html) => { $('#status').innerHTML = html; };
+const busy = (what) => say(`<span class="spinner"></span> ${what}…`);
+const fail = (e) => say(`<span class="error">${esc(e.message)}</span>`);
+const post = (route, body) => api(route, { method: 'POST', body: JSON.stringify(body) });
+let googleReady = false; // the Google button is shown with the sign-in form only
 
 // Opened in a new tab from a page with unsaved work: once signed in, go back to that tab.
 function done() {
   if (params.get('then') !== 'close') { location.replace(target); return; }
   window.close();
   $('#google-button').hidden = true;
+  $('#or').hidden = true;
+  $('#form').innerHTML = '';
   say('You’re signed in. Close this tab and carry on where you were.');
 }
 
 async function signedIn({ credential }) {
-  say('<span class="spinner"></span> Signing in…');
+  busy('Signing in');
   try {
-    await api('auth/google', { method: 'POST', body: JSON.stringify({ credential }) });
+    await post('auth/google', { credential });
     done();
   } catch (e) {
-    say(`<span class="error">${esc(e.message)}</span>`);
+    fail(e);
   }
 }
 
-try {
-  // Already signed in? Skip straight to the app.
-  const me = await fetch('api/index.php?r=auth/me');
-  if (me.ok) done();
-  else {
-    const { googleClientId } = await api('config');
-    if (!googleClientId) throw new Error('Sign-in is not configured on this server (GOOGLE_CLIENT_ID).');
-    for (let i = 0; !window.google?.accounts?.id; i++) {
-      if (i > 200) throw new Error('Could not load Google sign-in. Check your connection or content blockers, then reload.');
-      await new Promise((r) => setTimeout(r, 50));
+// ---- email + password: one form at a time in #form
+
+const field = (label, attrs) => `<label class="field">${label}<input ${attrs} required></label>`;
+const emailField = (value = '') => field('Email', `type="email" name="email" autocomplete="email" maxlength="254" value="${esc(value)}"`);
+const newPassword = (label) => field(label, 'type="password" name="password" autocomplete="new-password" minlength="8" maxlength="72"')
+  + '<span class="muted small" style="margin-top:-6px">At least 8 characters.</span>';
+
+// Account emails often land in spam, so say so wherever one is sent.
+const spamNote = (text) => `<p class="spam-note">${text}</p>`;
+
+const forms = {
+  signin: (email) => `<form>${emailField(email)}${field('Password', 'type="password" name="password" autocomplete="current-password"')}
+    <button class="btn primary">Sign in</button>
+    <div class="links"><button type="button" class="linkbtn" data-show="forgot">Forgot password?</button><button type="button" class="linkbtn" data-show="signup">Create an account</button></div></form>`,
+  signup: (email) => `<form><h2>Create an account</h2>${field('Name', 'type="text" name="name" autocomplete="name" maxlength="200"')}${emailField(email)}${newPassword('Password')}
+    ${spamNote('We’ll email you a link to confirm your address. It often ends up in the <strong>spam or junk folder</strong>, so look there if it doesn’t arrive.')}
+    <button class="btn primary">Create account</button>
+    <div class="links"><button type="button" class="linkbtn" data-show="signin">I already have an account</button></div></form>`,
+  forgot: (email) => `<form><h2>Reset your password</h2>${emailField(email)}
+    ${spamNote('We’ll email you a link to choose a new password. It often ends up in the <strong>spam or junk folder</strong>, so look there if it doesn’t arrive.')}
+    <button class="btn primary">Email me a link</button>
+    <div class="links"><button type="button" class="linkbtn" data-show="signin">Back to sign in</button></div></form>`,
+  reset: () => `<form><h2>Choose a new password</h2>${newPassword('New password')}
+    <button class="btn primary">Save password and sign in</button></form>`,
+};
+
+function show(name, email = $('#form input[name=email]')?.value || '') {
+  $('#form').innerHTML = forms[name](email);
+  $('#google-button').hidden = $('#or').hidden = !(googleReady && name === 'signin');
+  say('');
+  $('#form form').dataset.form = name;
+  $('#form input:not([value]), #form input[value=""]')?.focus();
+}
+
+/** "Check your email" with a way back to signing in (and optionally a button to send the email again). */
+function sent(html, resendTo) {
+  $('#form').innerHTML = `<form><p style="margin:0">${html}</p>${spamNote('Can’t see it? Check your <strong>spam or junk folder</strong>: these emails often end up there. Marking it “not spam” helps future emails arrive.')}
+    <div class="links">${resendTo ? '<button type="button" class="linkbtn" id="resend">Send it again</button>' : ''}<button type="button" class="linkbtn" data-show="signin">Back to sign in</button></div></form>`;
+  $('#google-button').hidden = $('#or').hidden = true;
+  say('');
+  $('#resend')?.addEventListener('click', async () => {
+    try { await post('auth/resend', { email: resendTo }); say('<span class="muted small">Sent. If you asked a moment ago, use the link in the email you already have.</span>'); } catch (e) { fail(e); }
+  });
+}
+
+$('#form').addEventListener('click', (e) => {
+  const to = e.target.closest('[data-show]')?.dataset.show;
+  if (to) show(to);
+});
+
+$('#form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const data = Object.fromEntries(new FormData(form));
+  const button = form.querySelector('.btn.primary');
+  button.disabled = true;
+  try {
+    switch (form.dataset.form) {
+      case 'signin':
+        busy('Signing in');
+        try {
+          await post('auth/login', data);
+        } catch (err) {
+          if (err.data?.unverified) {
+            sent(esc(err.message), data.email);
+            return;
+          }
+          throw err;
+        }
+        done();
+        break;
+      case 'signup':
+        busy('Creating your account');
+        await post('auth/signup', data);
+        sent(`Nearly there: we’ve sent an email to <strong>${esc(data.email)}</strong>. Open the link in it to confirm your address and sign in.`, data.email);
+        break;
+      case 'forgot':
+        busy('Sending');
+        await post('auth/forgot', data);
+        sent(`If <strong>${esc(data.email)}</strong> has an account here, we’ve emailed it a link to choose a new password. The link works for an hour.`);
+        break;
+      case 'reset':
+        busy('Saving');
+        await post('auth/reset', { ...data, token: window.pwToken.token });
+        done();
+        break;
     }
-    google.accounts.id.initialize({ client_id: googleClientId, callback: signedIn, ux_mode: 'popup' });
-    google.accounts.id.renderButton($('#google-button'), {
-      theme: document.documentElement.dataset.theme === 'dark' ? 'filled_black' : 'outline',
-      size: 'large', shape: 'pill', text: 'signin_with',
-    });
-    google.accounts.id.prompt(); // One Tap, when the browser allows it
+  } catch (err) {
+    fail(err);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+async function setUpGoogle(googleClientId) {
+  if (!googleClientId) return; // email + password only on this server
+  for (let i = 0; !window.google?.accounts?.id; i++) {
+    if (i > 200) { say('<span class="muted small">Google sign-in could not load (check content blockers), but you can sign in with your email.</span>'); return; }
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  google.accounts.id.initialize({ client_id: googleClientId, callback: signedIn, ux_mode: 'popup' });
+  google.accounts.id.renderButton($('#google-button'), {
+    theme: document.documentElement.dataset.theme === 'dark' ? 'filled_black' : 'outline',
+    size: 'large', shape: 'pill', text: 'signin_with',
+  });
+  googleReady = true;
+  if ($('#form form')?.dataset.form === 'signin') $('#google-button').hidden = $('#or').hidden = false;
+  google.accounts.id.prompt(); // One Tap, when the browser allows it
+}
+
+try {
+  const link = window.pwToken;
+  if (link?.kind === 'verify') {
+    busy('Confirming your email');
+    try {
+      await post('auth/verify', { token: link.token });
+      done();
+    } catch (e) {
+      show('signin');
+      fail(e);
+    }
+  } else if (link?.kind === 'reset') {
+    show('reset');
+  } else {
+    // Already signed in? Skip straight to the app.
+    const me = await fetch('api/index.php?r=auth/me');
+    if (me.ok) done();
+    else {
+      show('signin');
+      const { googleClientId } = await api('config');
+      await setUpGoogle(googleClientId);
+    }
   }
 } catch (e) {
-  say(`<span class="error">${esc(e.message)}</span>`);
+  fail(e);
 }
 </script>
 </body>

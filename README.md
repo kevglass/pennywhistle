@@ -40,16 +40,26 @@ Avoid ports browsers block as unsafe (e.g. 6000, 6665-6669). Without an API key 
 | `LICENSE_EFFORT` | Effort for license checks, defaults to `low` |
 | `PORT` | Local dev server port (`./dev.sh`) |
 | `DATA_DIR` | Where tunes are stored, defaults to `data/` next to the app code |
-| `GOOGLE_CLIENT_ID` | Required: OAuth client ID for Google sign-in (see below) |
+| `GOOGLE_CLIENT_ID` | OAuth client ID for Google sign-in (see below). Without it, only email + password sign-in is offered |
 | `ADMIN_EMAILS` | Comma-separated emails or `@domain`s that get a **Users** page in the account menu: every registered user with how many tunes they've saved, and a button to block or allow them adding more. Empty means nobody |
-| `ALLOWED_EMAILS` | Optional: comma-separated emails or `@domain`s allowed to sign in. Empty lets any Google account in, and transcriptions cost API credits |
+| `ALLOWED_EMAILS` | Optional: comma-separated emails or `@domain`s allowed to sign in or sign up. Empty lets anyone in, and transcriptions cost API credits |
 | `SITE_URL` | Optional: the site's address for links in friend request emails, e.g. `https://cokeandcode.com/pennywhistle`. Otherwise taken from the server name |
-| `MAIL_FROM` | Optional: sender address for friend request and upload request emails (sent with PHP's `mail()`), defaults to `noreply@<server name>` |
+| `MAIL_FROM` | Optional: sender address for account (confirm email, reset password), friend request and upload request emails (sent with PHP's `mail()`), defaults to `noreply@<server name>` |
 | `LEGACY_OWNER_EMAIL` | Optional: on this account's first sign-in, tunes saved before sign-in existed (`data/tunes/`) move into its library |
 
-### Google sign-in
+### Signing in
 
-Everyone signs in with Google, and each Google account has its own tune library. To set it up:
+People sign in with Google, or with an email address and password. Each account has its own tune library, and an email address is one library whichever way its owner signs in.
+
+**Email + password.** Sign-up asks for a name, email and password, then emails a link to confirm the address (valid 48 hours) before the account can sign in. **Forgot password?** emails a reset link (valid an hour); the account menu's **Change password** sends the same link, and Google users can use it to add a password. Changing a password signs out the account's other password sessions. Ten wrong passwords in a row lock the account for 15 minutes. Files under `DATA_DIR`:
+
+- `accounts/<sha256(email)>.json`: name, email, the `password_hash()` (bcrypt) of the password (never the password itself), whether the email is confirmed, and the library it uses.
+- `auth-tokens/<sha256(token)>.json`: pending confirm and reset links. Only a hash of each link's token is kept, and a link works once.
+- `auth-mail/`: when each address was last sent an account email (at most one a minute).
+
+These emails are sent with PHP's `mail()`, so the server must be able to send mail, and `SITE_URL` should be set if the server name isn't the public address.
+
+**Google.** To set it up:
 
 1. In the [Google Cloud console](https://console.cloud.google.com/apis/credentials), create an **OAuth client ID** of type **Web application**.
 2. Under **Authorised JavaScript origins**, add `http://localhost:6060` (or your dev `PORT`) and `https://cokeandcode.com`. No redirect URIs are needed.

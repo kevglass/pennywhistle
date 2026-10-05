@@ -1,6 +1,6 @@
 <?php
 // Penny Whistle Tabs API (PHP). Stores approved tunes as plain files under DATA_DIR
-// (default ../data, outside the web root), one library per Google account, and proxies
+// (default ../data, outside the web root), one library per account (Google or email + password), and proxies
 // transcription to Claude so the API key never reaches the browser.
 // Routed via public/api/index.php?r=<route>.
 declare(strict_types=1);
@@ -19,6 +19,7 @@ require __DIR__ . '/license.php';
 require __DIR__ . '/omr/musescore.php';
 require __DIR__ . '/friends.php';
 require __DIR__ . '/admin.php';
+require __DIR__ . '/accounts.php';
 
 // ------------------------------------------------------------------ config
 
@@ -398,7 +399,7 @@ function save_license(string $file, array $license): bool
     return true;
 }
 
-// ------------------------------------------------------------------ auth (Google sign-in)
+// ------------------------------------------------------------------ auth (Google sign-in; passwords are in accounts.php)
 
 const SESSION_DAYS = 30;
 const UPLOADS_BLOCKED = 'Adding new tunes is turned off for your account. You can ask the site owner for access on the new tab page.';
@@ -431,9 +432,12 @@ function current_user(): ?array
     if (!isset($_COOKIE['pwtabs'])) return null;
     start_session();
     $user = $_SESSION['user'] ?? null;
+    if (is_array($user) && !password_session_valid($user)) $user = null; // password changed since
     if ($user === null) session_destroy(); // stale cookie: don't leave an empty session behind
     else session_write_close();
-    return is_array($user) && valid_sub((string) ($user['sub'] ?? '')) ? $user : null;
+    if (!is_array($user) || !valid_sub((string) ($user['sub'] ?? ''))) return null;
+    unset($user['passwordChangedAt']);
+    return $user;
 }
 
 /** Google's account id ("sub") names the user's data folder, so keep it path-safe. */
@@ -514,7 +518,8 @@ function login(): never
     $email = (string) $claims['email'];
     if (!email_allowed($email)) send_json(403, ['error' => "$email is not allowed to use this site."]);
     $user = [
-        'sub' => (string) $claims['sub'],
+        // A confirmed password account with this email keeps its library.
+        'sub' => password_account_sub($email) ?? (string) $claims['sub'],
         'email' => $email,
         'name' => mb_substr((string) ($claims['name'] ?? $email), 0, 200),
         'picture' => is_string($claims['picture'] ?? null) ? $claims['picture'] : null,
@@ -552,15 +557,20 @@ function handle(): never
     $parts = $route === '' ? [] : explode('/', $route);
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
-    // Public routes: everything else needs a signed-in Google user.
+    // Public routes: everything else needs a signed-in user.
     if ($route === 'config' && $method === 'GET') send_json(200, ['transcribe' => has_key(), 'licenseCheck' => can_check_license(current_user()), 'model' => MODEL, 'googleClientId' => env('GOOGLE_CLIENT_ID')]);
     if ($route === 'auth/google' && $method === 'POST') login();
     if ($route === 'auth/logout' && $method === 'POST') logout();
+    if (str_starts_with($route, 'auth/')) handle_accounts($route, $method);
 
     $user = current_user();
     if (!$user) send_json(401, ['error' => 'Please sign in', 'login' => true]);
     $blocked = uploads_blocked($user['sub']);
-    if ($route === 'auth/me' && $method === 'GET') send_json(200, $user + ['friendRequests' => friend_request_count($user), 'admin' => is_admin($user), 'uploadsBlocked' => $blocked, 'uploadRequestedAt' => $blocked ? upload_requested_at($user['sub']) : null]);
+    if ($route === 'auth/me' && $method === 'GET') send_json(200, $user + ['hasPassword' => load_account($user['email'])['verified'] ?? false, 'friendRequests' => friend_request_count($user), 'admin' => is_admin($user), 'uploadsBlocked' => $blocked, 'uploadRequestedAt' => $blocked ? upload_requested_at($user['sub']) : null]);
+    if ($route === 'auth/password' && $method === 'POST') { // email a link to change (or add) a password
+        forgot_password($user['email']);
+        send_json(200, ['ok' => true, 'email' => $user['email']]);
+    }
     if ($route === 'auth/upload-request' && $method === 'POST') send_json(200, request_upload_access($user));
     if ($route === 'transcribe' && $method === 'POST') {
         if ($blocked) send_json(403, ['error' => UPLOADS_BLOCKED]);
