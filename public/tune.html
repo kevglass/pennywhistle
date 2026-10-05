@@ -212,11 +212,12 @@ try {
 }
 
 $('#tempo').addEventListener('input', () => { $('#tempo-v').textContent = $('#tempo').value; });
-function startPlay() {
-  player.play(Number($('#tempo').value), view.selected, { muted: isMuted(), chords: $('#guitar').checked });
+// The Play button starts from the top; changing a setting mid-tune carries on from the current note.
+function startPlay(from = view.selected) {
+  player.play(Number($('#tempo').value), from, { muted: isMuted(), chords: $('#guitar').checked });
   $('#play').textContent = '■ Stop';
 }
-$('#play').addEventListener('click', () => (player.playing ? player.stop() : startPlay()));
+$('#play').addEventListener('click', () => (player.playing ? player.stop() : startPlay(-1)));
 document.addEventListener('pw-mute', () => { if (player.playing) startPlay(); }); // carry on from the current note
 $('#guitar').addEventListener('change', () => { if (player.playing) startPlay(); });
 instrumentControl($('#instrument'), () => { if (player.playing) startPlay(); });
