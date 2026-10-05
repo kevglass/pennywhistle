@@ -72,9 +72,7 @@ async function showUser() {
       el.querySelector('summary').title += ` (${n} friend request${n === 1 ? '' : 's'})`;
       el.querySelector('#friends-link').insertAdjacentHTML('beforeend', ` <span class="badge accent">${n}</span>`);
     }
-    const pw = el.querySelector('#password-link');
-    pw.textContent = u.hasPassword ? 'Change password' : 'Add a password';
-    pw.title = u.hasPassword ? '' : 'Sign in with your email address as well as with Google';
+    el.querySelector('#password-link').hidden = !u.hasPassword; // Google users just sign in with Google
     if (u.admin) el.querySelector('#friends-link').insertAdjacentHTML('afterend', '<a class="btn" href="users.html">Users</a>');
   } catch (e) {
     if (e.signIn) location.replace(loginUrl()); // every page with a topbar needs a signed-in user; it stays hidden
@@ -87,7 +85,7 @@ document.addEventListener('click', async (e) => {
   if (!e.target.closest('#password-link')) return;
   try {
     const { email } = await api('auth/password', { method: 'POST' });
-    alert(`We’ve emailed ${email} a link to set your password. It works for an hour.\n\nIf it doesn’t arrive, check your spam or junk folder: these emails often end up there.`);
+    alert(`We’ve emailed ${email} a link to choose a new password. It works for an hour.\n\nIf it doesn’t arrive, check your spam or junk folder: these emails often end up there.`);
   } catch (err) {
     alert(err.message);
   }
@@ -268,7 +266,7 @@ export function topbar(active) {
     <a class="brand" href="./" aria-label="Penny Whistle Tabs: library"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="13" width="26" height="6" rx="3" fill="var(--accent)"/><circle cx="12" cy="16" r="1.6" fill="var(--surface)"/><circle cx="17" cy="16" r="1.6" fill="var(--surface)"/><circle cx="22" cy="16" r="1.6" fill="var(--surface)"/><rect x="3" y="13" width="5" height="6" rx="2" fill="var(--ink)"/></svg><span class="brand-long">Penny Whistle Tabs</span><span class="brand-short">Whistle Tabs</span></a>
     <nav>${playerToggle()}<a class="btn nav-library ${active === 'library' ? 'primary' : ''}" href="./">Library</a><details class="more account" id="account" hidden>
       <summary class="btn" aria-label="Account"></summary>
-      <div class="menu"><div class="who"></div><a class="btn" id="friends-link" href="friends.html">Friends</a><button class="btn" id="password-link" type="button">Password</button>${themeButton()}<button class="btn" id="sign-out" type="button">Sign out</button></div>
+      <div class="menu"><div class="who"></div><a class="btn" id="friends-link" href="friends.html">Friends</a><button class="btn" id="password-link" type="button" hidden>Change password</button>${themeButton()}<button class="btn" id="sign-out" type="button">Sign out</button></div>
     </details></nav>
   </header>`;
 }

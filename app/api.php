@@ -567,7 +567,8 @@ function handle(): never
     if (!$user) send_json(401, ['error' => 'Please sign in', 'login' => true]);
     $blocked = uploads_blocked($user['sub']);
     if ($route === 'auth/me' && $method === 'GET') send_json(200, $user + ['hasPassword' => load_account($user['email'])['verified'] ?? false, 'friendRequests' => friend_request_count($user), 'admin' => is_admin($user), 'uploadsBlocked' => $blocked, 'uploadRequestedAt' => $blocked ? upload_requested_at($user['sub']) : null]);
-    if ($route === 'auth/password' && $method === 'POST') { // email a link to change (or add) a password
+    if ($route === 'auth/password' && $method === 'POST') { // email a link to change the password
+        if (!(load_account($user['email'])['verified'] ?? false)) throw new HttpError('You sign in with Google, so there’s no password to change.', 400);
         forgot_password($user['email']);
         send_json(200, ['ok' => true, 'email' => $user['email']]);
     }

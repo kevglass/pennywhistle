@@ -6,7 +6,8 @@
 //   auth-mail/<sha256(email)>         touched when an account email is sent (one a minute at most)
 // Only password_hash() output is stored, never the password, and emailed links carry a random
 // token whose SHA-256 is all the server keeps. An account's library is users/<sub>/ as for Google:
-// the same email address is the same library whichever way its owner signs in.
+// the same email address is the same library whichever way its owner signs in. Someone who already
+// signs in with Google keeps to Google: they can't sign up or set a password for that email.
 declare(strict_types=1);
 
 const PASSWORD_MIN = 8;
@@ -59,7 +60,7 @@ function check_password(string $password): void
     if (strlen($password) > PASSWORD_MAX_BYTES) throw new HttpError('That password is too long: use at most ' . PASSWORD_MAX_BYTES . ' characters', 400);
 }
 
-/** The library folder already used by this email (a Google sign-in), or null. */
+/** The library folder already used by this email (a Google sign-in, or a password account's own), or null. */
 function sub_for_email(string $email): ?string
 {
     foreach (glob(DATA_ROOT . '/users/*/user.json') ?: [] as $file) {
@@ -132,14 +133,29 @@ function send_verify_email(string $email): void
         . "If you didn't sign up, you can ignore this email.\n");
 }
 
-function send_reset_email(string $email, bool $hasPassword): void
+function send_reset_email(string $email): void
 {
     if (!may_mail($email)) return;
     $link = site_url() . '/login.html?reset=' . new_token('reset', $email, RESET_HOURS);
-    $what = $hasPassword ? 'choose a new password' : 'set a password, so you can sign in with your email address as well as with Google';
     send_account_mail($email, 'Your Penny Whistle Tabs password', "Hello,\n\n"
-        . "To $what, open this link within the hour:\n$link\n\n"
+        . "To choose a new password, open this link within the hour:\n$link\n\n"
         . "If you didn't ask for this, you can ignore this email; your password hasn't changed.\n");
+}
+
+/** For a Google user who tried to sign up or reset a password: they have no password, they use Google. */
+function send_use_google_email(string $email): void
+{
+    if (!may_mail($email)) return;
+    send_account_mail($email, 'Sign in to Penny Whistle Tabs with Google', "Hello,\n\n"
+        . "Someone (hopefully you) asked for a Penny Whistle Tabs password for this email address. "
+        . "You sign in with Google, so there's no password to set: use \"Sign in with Google\" here:\n" . site_url() . "/login.html\n\n"
+        . "If you didn't ask for this, you can ignore this email.\n");
+}
+
+/** A Google user: their email has a library but no confirmed password account. */
+function is_google_user(string $email): bool
+{
+    return !(load_account($email)['verified'] ?? false) && sub_for_email($email) !== null;
 }
 
 // ------------------------------------------------------------------ routes
@@ -190,6 +206,8 @@ function signup(array $body): never
         if (may_mail($email)) send_account_mail($email, 'You already have a Penny Whistle Tabs account', "Hello,\n\n"
             . "Someone (hopefully you) tried to sign up to Penny Whistle Tabs with this email address, but it already has an account.\n\n"
             . "Sign in here, or use \"Forgot password?\" if you need a new one:\n" . site_url() . "/login.html\n");
+    } elseif (is_google_user($email)) {
+        send_use_google_email($email); // as above, the reply is the same as for a new account
     } else {
         // New, or never confirmed: whoever confirms the email owns it, with the details given last.
         save_account([
@@ -255,12 +273,12 @@ function resend_verification(array $body): never
     send_json(200, ['ok' => true]);
 }
 
-/** Email a reset link: to a password account, or to a Google user so they can add a password. */
+/** Email a reset link to a password account, or remind a Google user to sign in with Google. */
 function forgot_password(string $email): void
 {
     $email = valid_email($email);
-    $a = load_account($email);
-    if ($a || sub_for_email($email) !== null) send_reset_email($email, $a !== null);
+    if (is_google_user($email)) send_use_google_email($email);
+    elseif (load_account($email)) send_reset_email($email);
 }
 
 function reset_password(array $body): never
@@ -269,7 +287,9 @@ function reset_password(array $body): never
     check_password($password); // before the one-time token is used up
     $email = use_token('reset', (string) ($body['token'] ?? ''));
     if (!email_allowed($email)) throw new HttpError("$email is not allowed to use this site.", 403);
-    $a = load_account($email) ?? ['email' => $email, 'createdAt' => now_iso()];
+    // Links are only sent to password accounts; this also stops older links that offered Google users one.
+    $a = load_account($email);
+    if (!$a || is_google_user($email)) throw new HttpError('You sign in with Google, so there’s no password to set. Use Sign in with Google.', 400);
     $sub = ($a['verified'] ?? false) ? $a['sub'] : (sub_for_email($email) ?? 'pw-' . bin2hex(random_bytes(12)));
     $a = [
         'name' => $a['name'] ?? user_info($sub)['name'] ?? $email,
