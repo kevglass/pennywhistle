@@ -18,6 +18,7 @@ require __DIR__ . '/claude.php';
 require __DIR__ . '/license.php';
 require __DIR__ . '/omr/musescore.php';
 require __DIR__ . '/friends.php';
+require __DIR__ . '/favourites.php';
 require __DIR__ . '/admin.php';
 require __DIR__ . '/accounts.php';
 
@@ -579,6 +580,7 @@ function handle(): never
     }
     if (in_array($parts[0] ?? '', ['friends', 'library'], true)) handle_friends($user, $parts, $method);
     if (($parts[0] ?? '') === 'admin') handle_admin($user, $parts, $method);
+    if ($route === 'favourites') handle_favourites($user, $method);
     if (($parts[0] ?? '') !== 'tunes') send_json(404, ['error' => 'Not found']);
     define('TUNES_DIR', user_dir($user['sub']) . '/tunes');
     ensure_dir(TUNES_DIR);
@@ -606,7 +608,7 @@ function handle(): never
     $action = $parts[2] ?? '';
 
     if ($action === 'files' && isset($parts[3]) && $method === 'GET') serve_original($dir, $existing, $parts[3]);
-    if ($action === '' && $method === 'GET') send_json(200, $existing);
+    if ($action === '' && $method === 'GET') send_json(200, $existing + ['favourite' => is_favourite($user['sub'], $user['sub'], $existing['id'])]);
     if ($action === 'license' && $method === 'POST') license_check($dir, $existing, $user);
     if ($action === '' && $method === 'POST') { // update (POST for compatibility with simple hosts)
         $meta = meta_from_request();
@@ -626,6 +628,7 @@ function handle(): never
         foreach (glob("$dir/{,.}*", GLOB_BRACE) ?: [] as $f) if (is_file($f)) unlink($f);
         rmdir($dir);
         if (is_public_domain($existing)) forget_public_domain();
+        set_favourite($user, $user['sub'], $existing['id'], false);
         send_json(200, ['ok' => true]);
     }
     send_json(405, ['error' => 'Method not allowed']);

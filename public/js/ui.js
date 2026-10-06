@@ -73,7 +73,7 @@ async function showUser() {
       el.querySelector('#friends-link').insertAdjacentHTML('beforeend', ` <span class="badge accent">${n}</span>`);
     }
     el.querySelector('#password-link').hidden = !u.hasPassword; // Google users just sign in with Google
-    if (u.admin) el.querySelector('#friends-link').insertAdjacentHTML('afterend', '<a class="btn" href="users.html">Users</a>');
+    if (u.admin) el.querySelector('#friends-link').insertAdjacentHTML('afterend', '<a class="btn" href="users.html">Users</a><a class="btn" href="licenses.html">Licenses</a>');
   } catch (e) {
     if (e.signIn) location.replace(loginUrl()); // every page with a topbar needs a signed-in user; it stays hidden
     else reveal(); // the server couldn't be reached: show the page, whose own requests will say so
@@ -366,3 +366,13 @@ export function showLicenseDialog(title, lic, { onCheck } = {}) {
  */
 export const checkLicense = (id, owner, { again = false } = {}) =>
   api(`${tuneRoute(id, owner)}/license`, { method: 'POST', body: JSON.stringify({ again }) });
+
+// ------------------------------------------------------------ favourites
+
+/** Star or unstar a tune; owner is set for a friend's or a public domain tune. */
+export const setFavourite = (id, owner, favourite) =>
+  api('favourites', { method: 'POST', body: JSON.stringify({ id, owner: owner || '', favourite }) });
+
+/** A star button: filled when the tune is a favourite. */
+export const favouriteButton = (on, title, attrs = '') =>
+  `<button class="fav-star" type="button" aria-pressed="${on}" aria-label="${on ? 'Remove' : 'Add'} “${esc(title)}” ${on ? 'from' : 'to'} favourites" title="${on ? 'Remove from favourites' : 'Add to favourites'}"${attrs}>${on ? '★' : '☆'}</button>`;

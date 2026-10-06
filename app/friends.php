@@ -366,6 +366,7 @@ function handle_friends(array $user, array $parts, string $method): never
 {
     // The whole library, each piece once: all your own tunes, then friends' tunes (friends in
     // alphabetical order) leaving out pieces already listed, then the public domain section.
+    // Favourites (from any of these) come too; the page lists them first, in place of their usual row.
     if ($parts[0] === 'library' && $method === 'GET') {
         $mine = load_tunes(user_dir($user['sub']) . '/tunes');
         $shown = array_map('piece_of', $mine);
@@ -390,6 +391,7 @@ function handle_friends(array $user, array $parts, string $method): never
             'mine' => array_map('summary', $mine),
             'friends' => $friends,
             'publicDomain' => public_domain_tunes($user['sub'], array_column($friends, 'sub'), $shown),
+            'favourites' => favourite_tunes($user),
         ]);
     }
 
@@ -404,11 +406,11 @@ function handle_friends(array $user, array $parts, string $method): never
         if (!$tune) send_json(404, ['error' => 'Tune not found']);
         if (!is_friend($user['sub'], $owner)) {
             if (($parts[4] ?? '') !== '') send_json(404, ['error' => 'File not found']);
-            send_json(200, ['originals' => [], 'owner' => ['sub' => $owner], 'publicDomain' => true] + $tune);
+            send_json(200, ['originals' => [], 'owner' => ['sub' => $owner], 'publicDomain' => true, 'favourite' => is_favourite($user['sub'], $owner, $tune['id'])] + $tune);
         }
         $dir = user_dir($owner) . '/tunes';
         if (($parts[4] ?? '') === 'files' && isset($parts[5])) serve_original("$dir/{$tune['id']}", $tune, $parts[5]);
-        send_json(200, $tune + ['owner' => user_info($owner)]);
+        send_json(200, $tune + ['owner' => user_info($owner), 'favourite' => is_favourite($user['sub'], $owner, $tune['id'])]);
     }
 
     // License checks on friends' and public domain tunes: only the license is saved to the tune.

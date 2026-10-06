@@ -84,6 +84,7 @@ label { font-size: .88rem; color: var(--muted); }
 .tune-table td { border-top: 1px solid var(--line); }
 .tune-table tbody tr:first-child td { border-top: none; }
 .tune-table tbody tr { cursor: pointer; }
+.tune-table.static tbody tr { cursor: default; }
 .tune-table tbody tr:hover { background: var(--accent-soft); }
 .tune-table td a { color: inherit; font-weight: 600; text-decoration: none; }
 .tune-table td a:hover { color: var(--accent); text-decoration: underline; }
@@ -93,6 +94,13 @@ label { font-size: .88rem; color: var(--muted); }
 .tune-table th .sort:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 .tune-table th .arrow { font-size: .65rem; min-width: .7em; }
 .tune-table td.small { padding-top: 11px; }
+.tune-table .fav-cell { width: 1%; padding-right: 0; }
+.fav-star { all: unset; cursor: pointer; font-size: 1.15rem; line-height: 1; color: var(--muted); padding: 2px; border-radius: 4px; }
+.fav-star:hover { color: var(--ink); }
+.fav-star[aria-pressed="true"] { color: #e0a100; }
+.fav-star:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn .fav-icon { font-size: 1.05rem; line-height: 1; }
+.btn[aria-pressed="true"] .fav-icon { color: #e0a100; }
 .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .badge { font-size: .75rem; padding: 2px 8px; border-radius: 99px; background: var(--surface-2); color: var(--muted); }
 .badge.accent { background: var(--accent-soft); color: var(--accent); }

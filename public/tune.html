@@ -47,6 +47,7 @@
       <div id="meta" class="badges"></div>
     </div>
     <div class="actions">
+      <button class="btn" id="favourite" type="button" aria-pressed="false" hidden></button>
       <button class="btn" id="toggle-original" aria-pressed="false" hidden>Show original</button>
       <button class="btn primary" id="pdf" type="button"><svg class="icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span><span class="wide-only">Download </span>PDF</span></button>
       <a class="btn" id="edit" href="#">Edit</a>
@@ -83,7 +84,7 @@ import { buildDisplayAbc } from './js/core.js';
 import { TabView, Player, tone, defaultBpm } from './js/render.js';
 import { CHORD_INSTRUMENTS, getChordInstrument } from './js/guitar.js';
 import { renderPages, showPages } from './js/originals.js';
-import { $, api, esc, topbar, renderNow, renderChordList, originalSources, tabStyleControl, instrumentControl, chordInstrumentControl, errorHTML, loginUrl, tuneRoute, isMuted, licenseBadge, checkLicense, showLicenseDialog } from './js/ui.js';
+import { $, api, esc, topbar, renderNow, renderChordList, originalSources, tabStyleControl, instrumentControl, chordInstrumentControl, errorHTML, loginUrl, tuneRoute, isMuted, licenseBadge, checkLicense, showLicenseDialog, setFavourite } from './js/ui.js';
 
 $('#top').insertAdjacentHTML('afterbegin', topbar());
 const params = new URLSearchParams(location.search);
@@ -130,6 +131,28 @@ $('#meta').addEventListener('click', (e) => {
   }
 });
 
+// The star in the actions: favourites are listed first in the library.
+function renderFavourite() {
+  const btn = $('#favourite');
+  btn.hidden = false;
+  btn.setAttribute('aria-pressed', String(!!tune.favourite));
+  btn.title = tune.favourite ? 'Remove from your favourites' : 'Add to your favourites, at the top of your library';
+  btn.innerHTML = `<span class="fav-icon" aria-hidden="true">${tune.favourite ? '★' : '☆'}</span><span>${tune.favourite ? 'Favourite' : 'Add to favourites'}</span>`;
+}
+$('#favourite').addEventListener('click', async () => {
+  const on = !tune.favourite;
+  tune.favourite = on;
+  renderFavourite();
+  try {
+    await setFavourite(tune.id, owner, on);
+  } catch (e) {
+    tune.favourite = !on;
+    renderFavourite();
+    if (e.signIn) location.href = loginUrl();
+    else alert(`Could not ${on ? 'add this tune to' : 'remove this tune from'} your favourites: ${e.message}`);
+  }
+});
+
 async function setOriginal(show) {
   const btn = $('#toggle-original');
   btn.setAttribute('aria-pressed', String(show));
@@ -163,6 +186,7 @@ try {
   $('#meta').insertAdjacentHTML('beforeend', '<span id="license-slot" aria-live="polite"></span>');
   canCheck = !!(await api('config').catch(() => ({}))).licenseCheck;
   renderLicense();
+  renderFavourite();
   $('#edit').href = `editor.html?id=${encodeURIComponent(tune.id)}`;
   if (tune.owner) $('#edit').hidden = $('#delete').hidden = true;
   else $('#share').hidden = false;

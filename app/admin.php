@@ -2,7 +2,8 @@
 // Admin: the accounts in ADMIN_EMAILS see every registered user, how many tunes each has
 // saved, and can stop (or let) them save new tunes. Whether accounts may add tunes until an
 // admin decides otherwise is a site setting; a blocked account can ask for access, which
-// emails the admins. Stored as:
+// emails the admins. Admins also see every saved tune whose license hasn't been checked, and
+// (if they are also in LICENSE_CHECKERS) can check any of them. Stored as:
 //   settings.json             {"uploadsBlockedByDefault": bool, "changedBy", "changedAt"}
 //   users/<sub>/access.json   {"uploadsBlocked"?: bool, "changedBy", "changedAt", "requestedAt"?}
 //                             no uploadsBlocked: the site default applies
@@ -104,6 +105,38 @@ function list_users(): array
     return $out;
 }
 
+/**
+ * Every saved tune, in any library, whose license hasn't been checked: one entry per piece (a check
+ * covers every copy), with who uploaded each copy. Newest first.
+ */
+function unchecked_tunes(): array
+{
+    $pieces = [];
+    foreach (glob(DATA_ROOT . '/users/*/tunes/*/tune.json') ?: [] as $file) {
+        $t = json_decode((string) file_get_contents($file), true);
+        if (!is_array($t) || !isset($t['id']) || !empty($t['license']['checkedAt'])) continue;
+        $sub = basename(dirname($file, 3));
+        $owner = user_info($sub);
+        $copy = ['sub' => $sub, 'id' => $t['id'], 'name' => $owner['name'] ?? '', 'email' => $owner['email'] ?? '', 'createdAt' => $t['createdAt'] ?? null];
+        $piece = piece_of($t);
+        foreach ($pieces as $i => $p) {
+            if (pieces_match($piece, $p['piece'])) {
+                $pieces[$i]['copies'][] = $copy;
+                continue 2;
+            }
+        }
+        $pieces[] = ['piece' => $piece, 'title' => $t['title'] ?? 'Untitled', 'composer' => $t['composer'] ?? null, 'key' => $t['tab']['key'] ?? null, 'copies' => [$copy]];
+    }
+    $out = [];
+    foreach ($pieces as $p) {
+        usort($p['copies'], fn ($a, $b) => strcmp((string) $a['createdAt'], (string) $b['createdAt']));
+        unset($p['piece']);
+        $out[] = $p + ['createdAt' => end($p['copies'])['createdAt']];
+    }
+    usort($out, fn ($a, $b) => strcmp((string) $b['createdAt'], (string) $a['createdAt']));
+    return $out;
+}
+
 function admin_overview(): array
 {
     return ['uploadsBlockedByDefault' => uploads_blocked_by_default(), 'users' => list_users()];
@@ -112,6 +145,7 @@ function admin_overview(): array
 /**
  * Routes under admin/: users (GET), users/<sub>/uploads (POST {"blocked": bool}, or {"blocked": null}
  * for the site default), settings (POST {"uploadsBlockedByDefault": bool}). Each answers with admin_overview().
+ * Also licenses (GET: unchecked_tunes()) and tunes/<sub>/<id>/license (POST {"again"?}: check any user's tune).
  */
 function handle_admin(array $user, array $parts, string $method): never
 {
@@ -128,6 +162,13 @@ function handle_admin(array $user, array $parts, string $method): never
         // Deciding answers any pending request.
         write_json_atomic(access_file($sub), ($body['blocked'] === null ? [] : ['uploadsBlocked' => $body['blocked']]) + $stamp);
         send_json(200, admin_overview());
+    }
+    if (($parts[1] ?? '') === 'licenses' && !isset($parts[2]) && $method === 'GET') send_json(200, ['tunes' => unchecked_tunes()]);
+    if (($parts[1] ?? '') === 'tunes' && isset($parts[3]) && ($parts[4] ?? '') === 'license' && $method === 'POST') {
+        $owner = (string) $parts[2];
+        $tune = valid_sub($owner) ? load_tune(user_dir($owner) . '/tunes', (string) $parts[3]) : null;
+        if (!$tune) send_json(404, ['error' => 'Tune not found']);
+        license_check(user_dir($owner) . "/tunes/{$tune['id']}", $tune, $user);
     }
     if (($parts[1] ?? '') === 'settings' && !isset($parts[2]) && $method === 'POST') {
         $body = read_json_body();

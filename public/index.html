@@ -43,9 +43,9 @@
 </main>
 <footer class="site-footer no-print">Made by <a href="mailto:contact@pennywhistle.com">Kevin Glass</a>, Sarah Lewis</footer>
 <script type="module">
-import { $, api, esc, errorHTML, loginUrl, topbar, tuneHref, licenseBadge, checkLicense, showLicenseDialog, LICENSE_STATUS } from './js/ui.js';
+import { $, api, esc, errorHTML, loginUrl, topbar, tuneHref, licenseBadge, checkLicense, showLicenseDialog, LICENSE_STATUS, setFavourite, favouriteButton } from './js/ui.js';
 $('#top').innerHTML = topbar('library');
-let lib = { mine: [], friends: [], publicDomain: [] };
+let lib = { mine: [], friends: [], publicDomain: [], favourites: [] };
 let loaded = false;
 let canCheck = false; // this account may run license checks
 const checking = new Set(); // ids of tunes whose license is being checked
@@ -58,11 +58,22 @@ const licenseCell = (t, owner) => {
   return `<button class="btn compact check-license" type="button" data-id="${esc(t.id)}" title="Look up who owns the rights to this tune and whether it can be used for free in a game or video">Check</button>`;
 };
 
-const row = (t, owner) => {
+// A tune's key among the favourites: owner is empty for your own tunes.
+const favKey = (t, owner) => `${owner || ''}/${t.id}`;
+const isFav = (t, owner) => lib.favourites.some((f) => favKey(f, f.owner) === favKey(t, owner));
+// Whose a favourite from someone else's library is: a friend's name, or public domain.
+const fromLabel = (owner) => {
+  const f = lib.friends.find((x) => x.sub === owner);
+  return f ? `from ${f.name || f.email}` : 'public domain';
+};
+
+const row = (t, owner, { from = false } = {}) => {
   const href = esc(tuneHref(t.id, owner));
+  const sub = [t.composer, from && owner && fromLabel(owner)].filter(Boolean).join(' · ');
   return `
       <tr data-href="${href}">
-        <td><a href="${href}">${esc(t.title)}</a>${t.composer ? `<div class="muted small">${esc(t.composer)}</div>` : ''}</td>
+        <td class="fav-cell">${favouriteButton(isFav(t, owner), t.title, ` data-id="${esc(t.id)}" data-owner="${esc(owner || '')}"`)}</td>
+        <td><a href="${href}">${esc(t.title)}</a>${sub ? `<div class="muted small">${esc(sub)}</div>` : ''}</td>
         <td>${t.key ? esc(t.key) : ''}</td>
         <td class="wide-only">${t.meter ? esc(t.meter) : ''}</td>
         <td class="num">${t.measures}</td>
@@ -109,7 +120,7 @@ function section(heading, tunes, emptyText, q) {
   if (q && !tunes.length) return '';
   return `<section class="lib-section"><h2>${heading}</h2>
     ${tunes.length ? `<div class="tune-table-wrap"><table class="tune-table">
-      <thead><tr>${COLUMNS.map((c) => {
+      <thead><tr><th class="fav-cell" aria-label="Favourite"></th>${COLUMNS.map((c) => {
         const on = c.id === sort.by, dir = sort.desc ? 'descending' : 'ascending';
         return `<th class="${c.cls || ''}"${on ? ` aria-sort="${dir}"` : ''}><button class="sort${on ? ' on' : ''}" type="button" data-sort="${c.id}" title="Sort by ${c.label.toLowerCase()}">${c.label}<span class="arrow" aria-hidden="true">${on ? (sort.desc ? '▼' : '▲') : ''}</span></button></th>`;
       }).join('')}</tr></thead>
@@ -118,31 +129,59 @@ function section(heading, tunes, emptyText, q) {
 
 function draw() {
   const q = $('#q').value.trim().toLowerCase();
-  const total = lib.mine.length + lib.friends.reduce((n, f) => n + f.tunes.length, 0) + lib.publicDomain.length;
-  const empty = !lib.mine.length && !lib.friends.length && !lib.publicDomain.length;
+  const total = lib.mine.length + lib.friends.reduce((n, f) => n + f.tunes.length, 0) + lib.publicDomain.length + lib.favourites.length;
+  const empty = !total && !lib.friends.length;
   $('#empty').hidden = !empty;
   if (empty) { $('#list').innerHTML = ''; return; }
-  const mine = lib.mine.filter((t) => matches(q, t)).sort(bySort).map((t) => row(t));
-  let html = section('Your tunes', mine, 'You haven’t saved any tunes yet. <a href="editor.html">Create your first tab</a>.', q);
+  // Favourites come first, and are left out of the sections below.
+  const notFav = (owner) => (t) => !isFav(t, owner ?? t.owner);
+  const owners = (t) => lib.friends.find((f) => f.sub === t.owner) || (t.owner ? { name: 'public domain' } : {});
+  const favs = lib.favourites.filter((t) => matches(q, t, owners(t))).sort(bySort).map((t) => row(t, t.owner, { from: true }));
+  let html = favs.length ? section('Favourites', favs, '', q) : '';
+  const mine = lib.mine.filter(notFav('')).filter((t) => matches(q, t)).sort(bySort).map((t) => row(t));
+  html += section('Your tunes', mine, lib.mine.length ? 'All your tunes are in your favourites.' : 'You haven’t saved any tunes yet. <a href="editor.html">Create your first tab</a>.', q);
   // Friends come in the server's order, which also decides whose copy of a piece they share is listed.
   for (const f of lib.friends) {
-    const shown = f.tunes.filter((t) => matches(q, t, f)).sort(bySort).map((t) => row(t, f.sub));
+    const shown = f.tunes.filter(notFav(f.sub)).filter((t) => matches(q, t, f)).sort(bySort).map((t) => row(t, f.sub));
     const heading = f.name && f.name !== f.email
       ? `${esc(f.name)} <span class="muted small">${esc(f.email)}</span>` : esc(f.email);
-    html += section(heading, shown, f.hidden ? 'No tunes you haven’t already got access to.' : 'No tunes yet.', q);
+    html += section(heading, shown, f.tunes.length ? 'All their tunes are in your favourites.' : f.hidden ? 'No tunes you haven’t already got access to.' : 'No tunes yet.', q);
   }
   // Free-to-use tunes from everyone else, minus any piece already listed above (the server leaves those out).
-  const pd = lib.publicDomain.filter((t) => matches(q, t, { name: 'public domain' })).sort(bySort).map((t) => row(t, t.owner));
+  const pd = lib.publicDomain.filter(notFav()).filter((t) => matches(q, t, { name: 'public domain' })).sort(bySort).map((t) => row(t, t.owner));
   if (pd.length) html += section('Public domain <span class="muted small">free-to-use tunes shared by everyone</span>', pd, '', q);
   $('#list').innerHTML = html || (total ? '<p class="muted">No tunes match your search.</p>' : '');
 }
 $('#q').addEventListener('input', draw);
 // The whole row opens the tune; the title link keeps it keyboard- and middle-click-friendly.
 // A tune in the library by id (and owner, for a friend's tune).
-const findTune = (id, owner) => (owner ? lib.friends.find((f) => f.sub === owner)?.tunes : lib.mine)?.find((x) => x.id === id)
+const findTune = (id, owner) => lib.favourites.find((x) => (x.owner || '') === (owner || '') && x.id === id)
+  || findListed(id, owner);
+// The same tune in its usual section (not the favourites).
+const findListed = (id, owner) => (owner ? lib.friends.find((f) => f.sub === owner)?.tunes : lib.mine)?.find((x) => x.id === id)
   || (owner && lib.publicDomain.find((x) => x.owner === owner && x.id === id));
 
 $('#list').addEventListener('click', async (e) => {
+  const star = e.target.closest('.fav-star');
+  if (star) {
+    const { id, owner } = star.dataset;
+    const t = findTune(id, owner);
+    if (!t) return;
+    const on = !isFav(t, owner);
+    const before = lib.favourites;
+    lib.favourites = on ? [...before, Object.assign(t, { owner: owner || undefined })] : before.filter((f) => favKey(f, f.owner) !== favKey(t, owner));
+    draw();
+    document.querySelector(`.fav-star[data-id="${CSS.escape(id)}"][data-owner="${CSS.escape(owner)}"]`)?.focus();
+    try {
+      await setFavourite(id, owner, on);
+    } catch (err) {
+      lib.favourites = before;
+      draw();
+      if (err.signIn) location.href = loginUrl();
+      else alert(`Could not ${on ? 'add' : 'remove'} “${t.title}” ${on ? 'to' : 'from'} favourites: ${err.message}`);
+    }
+    return;
+  }
   const head = e.target.closest('button[data-sort]');
   if (head) {
     const by = head.dataset.sort;
@@ -184,7 +223,16 @@ $('#list').addEventListener('click', async (e) => {
   if (tr && !e.target.closest('a') && !getSelection().toString()) location.href = tr.dataset.href;
 });
 api('config').then((c) => { canCheck = !!c.licenseCheck; if (loaded) draw(); }).catch(() => {});
-try { lib = { publicDomain: [], ...(await api('library')) }; loaded = true; draw(); }
+try {
+  lib = { publicDomain: [], favourites: [], ...(await api('library')) };
+  // A favourite listed in another section too is the same tune: share the object, so a license check shows in both.
+  lib.favourites = lib.favourites.map((f) => {
+    const t = findListed(f.id, f.owner);
+    return t ? Object.assign(t, { owner: f.owner }) : f;
+  });
+  loaded = true;
+  draw();
+}
 catch (e) { $('#list').innerHTML = `<p>${errorHTML(e, 'Could not load the library')}</p>`; }
 </script>
 </body>

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Licenses · Penny Whistle Tabs</title>
+<meta name="description" content="Turn sheet music into easy-to-follow D tin whistle tabs with guitar chords. Free for everyone.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Penny Whistle Tabs">
+<meta property="og:title" content="Licenses · Penny Whistle Tabs">
+<meta property="og:description" content="Turn sheet music into easy-to-follow D tin whistle tabs with guitar chords. Free for everyone.">
+<meta property="og:url" content="https://cokeandcode.com/pennywhistle/licenses.html">
+<meta property="og:image" content="https://cokeandcode.com/pennywhistle/social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Penny Whistle Tabs: turn sheet music into whistle tabs with guitar chords.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#1f6f5c">
+<script>try{if(localStorage.getItem('pw-theme')==='dark')document.documentElement.dataset.theme='dark'}catch(e){}</script>
+<script>document.documentElement.classList.add('auth-pending')</script>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="top"></div>
+<main>
+  <div class="lib-head">
+    <div>
+      <h1>Unchecked licenses</h1>
+      <p class="muted" style="margin:0">Every tune anyone has saved whose license hasn’t been checked yet. Copies of the same piece are listed once: checking it checks every copy. Each check searches the web with Claude, which costs API credits.</p>
+    </div>
+  </div>
+  <p id="note" class="muted small" hidden></p>
+  <div id="list" aria-live="polite"><p class="muted"><span class="spinner"></span> Loading…</p></div>
+</main>
+<footer class="site-footer no-print">Made by <a href="mailto:contact@pennywhistle.com">Kevin Glass</a>, Sarah Lewis</footer>
+<script type="module">
+import { $, api, esc, errorHTML, loginUrl, topbar, licenseBadge, showLicenseDialog } from './js/ui.js';
+$('#top').innerHTML = topbar();
+
+let tunes = [];
+let canCheck = false; // this account is also in LICENSE_CHECKERS
+const checking = new Set(); // indexes of tunes being checked
+const when = (iso) => (iso ? new Date(iso).toLocaleDateString() : '');
+const route = (t) => `admin/tunes/${t.copies[0].sub}/${t.copies[0].id}/license`;
+
+// Who saved the piece: the first uploader, and how many others have a copy.
+const uploaders = (t) => {
+  const names = [...new Set(t.copies.map((c) => c.name || c.email || 'Unknown'))];
+  return esc(names[0]) + (names.length > 1 ? ` <span class="muted">+ ${names.length - 1} more</span>` : '');
+};
+
+const licenseCell = (t, i) => {
+  if (t.license) return licenseBadge(t.license, { button: true });
+  if (checking.has(i)) return '<span class="lic-checking muted small"><span class="spinner" aria-hidden="true"></span>Checking…</span>';
+  if (!canCheck) return '<span class="muted small">Not checked</span>';
+  return '<button class="btn compact check-license" type="button" title="Look up who owns the rights to this tune and whether it can be used for free in a game or video">Check</button>';
+};
+
+function draw() {
+  const left = tunes.filter((t) => !t.license).length;
+  $('#list').innerHTML = tunes.length ? `<section class="lib-section"><h2>${left} tune${left === 1 ? '' : 's'} to check</h2>
+    <div class="tune-table-wrap"><table class="tune-table static">
+      <thead><tr><th>Title</th><th>Key</th><th>Saved by</th><th class="wide-only">Saved</th><th>License</th></tr></thead>
+      <tbody>${tunes.map((t, i) => `<tr data-i="${i}" title="${esc(t.copies.map((c) => `${c.name} <${c.email}>`).join('\n'))}">
+        <td><strong>${esc(t.title)}</strong>${t.composer ? `<div class="muted small">${esc(t.composer)}</div>` : ''}</td>
+        <td>${esc(t.key || '')}</td>
+        <td class="small">${uploaders(t)}</td>
+        <td class="wide-only muted small">${when(t.createdAt)}</td>
+        <td>${licenseCell(t, i)}</td></tr>`).join('')}</tbody></table></div></section>`
+    : '<div class="card empty"><h2>All checked</h2><p class="muted">Every saved tune has had its license checked.</p></div>';
+}
+
+$('#list').addEventListener('click', async (e) => {
+  const tr = e.target.closest('tr[data-i]');
+  if (!tr) return;
+  const i = Number(tr.dataset.i), t = tunes[i];
+  if (e.target.closest('.show-license')) {
+    const onCheck = canCheck ? async () => { t.license = await api(route(t), { method: 'POST', body: JSON.stringify({ again: true }) }); draw(); return t.license; } : undefined;
+    showLicenseDialog(t.title, t.license, { onCheck });
+    return;
+  }
+  if (!e.target.closest('.check-license')) return;
+  checking.add(i);
+  draw();
+  try {
+    t.license = await api(route(t), { method: 'POST', body: JSON.stringify({}) });
+  } catch (err) {
+    if (err.signIn) location.href = loginUrl();
+    else alert(`Could not check the license of “${t.title}”: ${err.message}`);
+  } finally {
+    checking.delete(i);
+    draw();
+  }
+});
+
+try {
+  [{ tunes }, { licenseCheck: canCheck }] = await Promise.all([api('admin/licenses'), api('config').catch(() => ({}))]);
+  canCheck = !!canCheck;
+  if (!canCheck) {
+    $('#note').hidden = false;
+    $('#note').textContent = 'Your account can’t run license checks: add it to LICENSE_CHECKERS in the server .env file.';
+  }
+  draw();
+} catch (e) { $('#list').innerHTML = `<p>${errorHTML(e, 'Could not load the tunes')}</p>`; }
+</script>
+</body>
+</html>
