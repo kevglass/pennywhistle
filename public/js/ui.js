@@ -261,12 +261,29 @@ document.addEventListener('click', (e) => {
   btn.outerHTML = themeButton();
 });
 
+// ---- fullscreen (not offered where the browser can't do it, e.g. iPhone Safari)
+function fullscreenButton() {
+  if (!document.fullscreenEnabled) return '';
+  return `<button class="btn" id="fullscreen-toggle" type="button">${document.fullscreenElement ? '⤡ Exit full screen' : '⤢ Full screen'}</button>`;
+}
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#fullscreen-toggle')) return;
+  e.target.closest('details')?.removeAttribute('open');
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else document.documentElement.requestFullscreen().catch(() => {});
+});
+// Keep the label right however fullscreen was left (Esc, the browser's own controls).
+document.addEventListener('fullscreenchange', () => {
+  const btn = document.getElementById('fullscreen-toggle');
+  if (btn) btn.outerHTML = fullscreenButton();
+});
+
 export function topbar(active) {
   return `<header class="topbar">
     <a class="brand" href="./" aria-label="Penny Whistle Tabs: library"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="13" width="26" height="6" rx="3" fill="var(--accent)"/><circle cx="12" cy="16" r="1.6" fill="var(--surface)"/><circle cx="17" cy="16" r="1.6" fill="var(--surface)"/><circle cx="22" cy="16" r="1.6" fill="var(--surface)"/><rect x="3" y="13" width="5" height="6" rx="2" fill="var(--ink)"/></svg><span class="brand-long">Penny Whistle Tabs</span><span class="brand-short">Whistle Tabs</span></a>
     <nav>${playerToggle()}<a class="btn nav-library ${active === 'library' ? 'primary' : ''}" href="./">Library</a><details class="more account" id="account" hidden>
       <summary class="btn" aria-label="Account"></summary>
-      <div class="menu"><div class="who"></div><a class="btn" id="friends-link" href="friends.html">Friends</a><button class="btn" id="password-link" type="button" hidden>Change password</button>${themeButton()}<button class="btn" id="sign-out" type="button">Sign out</button></div>
+      <div class="menu"><div class="who"></div><a class="btn" id="friends-link" href="friends.html">Friends</a><button class="btn" id="password-link" type="button" hidden>Change password</button>${themeButton()}${fullscreenButton()}<button class="btn" id="sign-out" type="button">Sign out</button></div>
     </details></nav>
   </header>`;
 }
