@@ -1,7 +1,7 @@
 import { analyzeTune, buildDisplayAbc, bestTranspose, whistleStats, cleanAbc, tabDocument, transposedKeyName } from './core.js';
 import { TabView, Player, tone, defaultBpm } from './render.js';
 import { renderPages, pagesToImages, showPages, ACCEPTED } from './originals.js';
-import { $, api, apiUrl, apiError, errorHTML, esc, topbar, renderNow, originalSources, tabStyleControl, instrumentControl, chordInstrumentControl, isMuted } from './ui.js';
+import { $, api, apiUrl, apiError, errorHTML, esc, topbar, renderNow, originalSources, tabStyleControl, instrumentControl, chordInstrumentControl, isMuted, messageDialog } from './ui.js';
 
 $('#top').insertAdjacentHTML('afterbegin', topbar());
 
@@ -369,7 +369,7 @@ $('#save').addEventListener('click', async () => {
     const dup = e.data?.duplicate; // the same piece is already in the library
     if (e.signIn) $('#save-status').innerHTML = errorHTML(e, '', { newTab: true });
     else if (dup) $('#save-status').innerHTML = `<span class="error">Not saved: ${esc(msg)}, and a piece is kept only once.</span> <a href="tune.html?id=${encodeURIComponent(dup.id)}" target="_blank" rel="noopener">Open “${esc(dup.title)}”</a>`;
-    else alert('Could not save: ' + msg);
+    else messageDialog('Could not save', msg.charAt(0).toUpperCase() + msg.slice(1));
     btn.disabled = false;
     btn.textContent = 'Approve & save';
   }
@@ -402,7 +402,7 @@ $('#save').addEventListener('click', async () => {
         e.target.parentElement.outerHTML = requested(requestedAt);
       } catch (err) {
         e.target.disabled = false;
-        alert(err.message);
+        messageDialog('Could not send the request', err.message);
       }
     });
     return;

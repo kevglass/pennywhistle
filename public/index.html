@@ -43,7 +43,7 @@
 </main>
 <footer class="site-footer no-print">Made by <a href="mailto:contact@pennywhistle.com">Kevin Glass</a>, Sarah Lewis</footer>
 <script type="module">
-import { $, api, esc, errorHTML, loginUrl, topbar, tuneHref, licenseBadge, checkLicense, showLicenseDialog, LICENSE_STATUS, setFavourite, favouriteButton } from './js/ui.js';
+import { $, api, esc, errorHTML, loginUrl, topbar, tuneHref, licenseBadge, checkLicense, showLicenseDialog, LICENSE_STATUS, setFavourite, favouriteButton, deleteTune, messageDialog } from './js/ui.js';
 $('#top').innerHTML = topbar('library');
 let lib = { mine: [], friends: [], publicDomain: [], favourites: [] };
 let loaded = false;
@@ -67,6 +67,10 @@ const fromLabel = (owner) => {
   return f ? `from ${f.name || f.email}` : 'public domain';
 };
 
+// Only your own tunes can be deleted; a friend's or public domain tune gets an empty cell.
+const TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>';
+const deleteButton = (t) => `<button class="del-tune" type="button" data-id="${esc(t.id)}" aria-label="Delete “${esc(t.title)}”" title="Delete from your library">${TRASH}</button>`;
+
 const row = (t, owner, { from = false } = {}) => {
   const href = esc(tuneHref(t.id, owner));
   const sub = [t.composer, from && owner && fromLabel(owner)].filter(Boolean).join(' · ');
@@ -80,6 +84,7 @@ const row = (t, owner, { from = false } = {}) => {
         <td data-id="${esc(t.id)}" data-owner="${esc(owner || '')}">${licenseCell(t, owner)}</td>
         <td class="wide-only muted small">${(t.chords || []).map(esc).join(' · ')}</td>
         <td class="wide-only muted small">${new Date(t.updatedAt).toLocaleDateString()}</td>
+        <td class="del-cell">${owner ? '' : deleteButton(t)}</td>
       </tr>`;
 };
 
@@ -123,7 +128,7 @@ function section(heading, tunes, emptyText, q) {
       <thead><tr><th class="fav-cell" aria-label="Favourite"></th>${COLUMNS.map((c) => {
         const on = c.id === sort.by, dir = sort.desc ? 'descending' : 'ascending';
         return `<th class="${c.cls || ''}"${on ? ` aria-sort="${dir}"` : ''}><button class="sort${on ? ' on' : ''}" type="button" data-sort="${c.id}" title="Sort by ${c.label.toLowerCase()}">${c.label}<span class="arrow" aria-hidden="true">${on ? (sort.desc ? '▼' : '▲') : ''}</span></button></th>`;
-      }).join('')}</tr></thead>
+      }).join('')}<th class="del-cell" aria-label="Delete"></th></tr></thead>
       <tbody>${tunes.join('')}</tbody></table></div>` : `<p class="muted">${emptyText}</p>`}</section>`;
 }
 
@@ -178,7 +183,22 @@ $('#list').addEventListener('click', async (e) => {
       lib.favourites = before;
       draw();
       if (err.signIn) location.href = loginUrl();
-      else alert(`Could not ${on ? 'add' : 'remove'} “${t.title}” ${on ? 'to' : 'from'} favourites: ${err.message}`);
+      else messageDialog(`Could not ${on ? 'add' : 'remove'} “${t.title}” ${on ? 'to' : 'from'} favourites`, err.message);
+    }
+    return;
+  }
+  const del = e.target.closest('.del-tune');
+  if (del) {
+    const t = lib.mine.find((x) => x.id === del.dataset.id);
+    if (!t) return;
+    try {
+      if (!(await deleteTune(t))) return;
+      lib.mine = lib.mine.filter((x) => x !== t);
+      lib.favourites = lib.favourites.filter((f) => f.owner || f.id !== t.id);
+      draw();
+    } catch (err) {
+      if (err.signIn) location.href = loginUrl();
+      else messageDialog(`Could not delete “${t.title}”`, err.message);
     }
     return;
   }
@@ -212,7 +232,7 @@ $('#list').addEventListener('click', async (e) => {
       t.license = await checkLicense(id, owner);
     } catch (err) {
       if (err.signIn) location.href = loginUrl();
-      else alert(`Could not check the license of “${t.title}”: ${err.message}`);
+      else messageDialog(`Could not check the license of “${t.title}”`, err.message);
     } finally {
       checking.delete(key);
       draw();

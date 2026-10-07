@@ -35,7 +35,7 @@
 </main>
 <footer class="site-footer no-print">Made by <a href="mailto:contact@pennywhistle.com">Kevin Glass</a>, Sarah Lewis</footer>
 <script type="module">
-import { $, api, esc, errorHTML, loginUrl, topbar, licenseBadge, showLicenseDialog } from './js/ui.js';
+import { $, api, esc, errorHTML, loginUrl, topbar, licenseBadge, showLicenseDialog, messageDialog } from './js/ui.js';
 $('#top').innerHTML = topbar();
 
 let tunes = [];
@@ -87,7 +87,7 @@ $('#list').addEventListener('click', async (e) => {
     t.license = await api(route(t), { method: 'POST', body: JSON.stringify({}) });
   } catch (err) {
     if (err.signIn) location.href = loginUrl();
-    else alert(`Could not check the license of “${t.title}”: ${err.message}`);
+    else messageDialog(`Could not check the license of “${t.title}”`, err.message);
   } finally {
     checking.delete(i);
     draw();

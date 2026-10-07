@@ -40,7 +40,7 @@
 </main>
 <footer class="site-footer no-print">Made by <a href="mailto:contact@pennywhistle.com">Kevin Glass</a>, Sarah Lewis</footer>
 <script type="module">
-import { $, api, esc, errorHTML, topbar } from './js/ui.js';
+import { $, api, esc, errorHTML, topbar, messageDialog } from './js/ui.js';
 $('#top').innerHTML = topbar();
 
 const avatar = (p) => (p.picture
@@ -74,7 +74,7 @@ document.addEventListener('click', async (ev) => {
     draw(await api(`admin/users/${btn.dataset.sub}/uploads`, { method: 'POST', body: JSON.stringify({ blocked: btn.dataset.blocked === 'true' }) }));
   } catch (e) {
     btn.disabled = false;
-    alert(e.message);
+    messageDialog('Could not change upload access', e.message);
   }
 });
 
@@ -86,7 +86,7 @@ $('#default-allowed').addEventListener('change', async (ev) => {
   } catch (e) {
     box.checked = !box.checked;
     box.disabled = false;
-    alert(e.message);
+    messageDialog('Could not change the setting', e.message);
   }
 });
 

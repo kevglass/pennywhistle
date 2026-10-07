@@ -85,9 +85,9 @@ document.addEventListener('click', async (e) => {
   if (!e.target.closest('#password-link')) return;
   try {
     const { email } = await api('auth/password', { method: 'POST' });
-    alert(`We’ve emailed ${email} a link to choose a new password. It works for an hour.\n\nIf it doesn’t arrive, check your spam or junk folder: these emails often end up there.`);
+    messageDialog('Check your email', `We’ve emailed ${email} a link to choose a new password. It works for an hour.\n\nIf it doesn’t arrive, check your spam or junk folder: these emails often end up there.`);
   } catch (err) {
-    alert(err.message);
+    messageDialog('Could not send the password email', err.message);
   }
 });
 
@@ -375,6 +375,49 @@ export function showLicenseDialog(title, lic, { onCheck } = {}) {
   dlg.addEventListener('close', () => dlg.remove());
   document.body.append(dlg);
   dlg.showModal();
+}
+
+// A pop-up in the middle of the screen (instead of the browser's alert() and confirm()); resolves with
+// the button pressed: 'ok', or '' for Cancel, Escape or a click on the backdrop. Blank lines in the message start a new paragraph.
+function popup(title, message, buttons) {
+  const dlg = document.createElement('dialog');
+  dlg.className = 'confirm-dialog';
+  const paras = String(message || '').split(/\n\s*\n/).filter((p) => p.trim()).map((p) => `<p>${esc(p)}</p>`).join('');
+  dlg.innerHTML = `<h2>${esc(title)}</h2>${paras}<div class="row">${buttons}</div>`;
+  return new Promise((resolve) => {
+    dlg.addEventListener('click', (e) => {
+      if (e.target.closest('[data-ok]')) dlg.close('ok');
+      else if (e.target === dlg || e.target.closest('[data-cancel]')) dlg.close();
+    });
+    dlg.addEventListener('close', () => { dlg.remove(); resolve(dlg.returnValue); });
+    document.body.append(dlg);
+    dlg.showModal();
+  });
+}
+
+/**
+ * A yes/no pop-up; resolves true if confirmed. Cancel has the focus, so a stray Enter doesn't delete anything.
+ */
+export async function confirmDialog({ title, message, confirmLabel = 'OK', danger = false }) {
+  return (await popup(title, message, `<button class="btn" type="button" data-cancel autofocus>Cancel</button><button class="btn ${danger ? 'danger-fill' : 'primary'}" type="button" data-ok>${esc(confirmLabel)}</button>`)) === 'ok';
+}
+
+/** A pop-up with a message and an OK button; resolves when it is closed. */
+export async function messageDialog(title, message) {
+  await popup(title, message, '<button class="btn primary" type="button" data-ok autofocus>OK</button>');
+}
+
+/** Delete one of your own tunes, after asking; resolves true once it is gone. */
+export async function deleteTune(tune) {
+  const ok = await confirmDialog({
+    title: `Delete “${tune.title}”?`,
+    message: 'The tab and its original sheet music files are removed from your library. This can’t be undone.',
+    confirmLabel: 'Delete',
+    danger: true,
+  });
+  if (!ok) return false;
+  await api(`tunes/${tune.id}/delete`, { method: 'POST' });
+  return true;
 }
 
 /**

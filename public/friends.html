@@ -53,7 +53,7 @@
 </main>
 <footer class="site-footer no-print">Made by <a href="mailto:contact@pennywhistle.com">Kevin Glass</a>, Sarah Lewis</footer>
 <script type="module">
-import { $, api, esc, errorHTML, topbar } from './js/ui.js';
+import { $, api, esc, errorHTML, topbar, confirmDialog, messageDialog } from './js/ui.js';
 $('#top').innerHTML = topbar();
 
 const avatar = (p) => (p.picture
@@ -106,19 +106,29 @@ document.addEventListener('click', async (ev) => {
   const btn = ev.target.closest('button[data-act]');
   if (!btn) return;
   const { act, sub, email, name } = btn.dataset;
-  if (act === 'remove' && !confirm(`Remove ${name} from your friends? You will no longer see each other’s tunes.`)) return;
-  if (act === 'share' && !confirm(`Copy all your tunes into ${name}’s library? They become ${name}’s own tunes; any they already have are skipped.`)) return;
+  if (act === 'remove' && !await confirmDialog({
+    title: `Remove ${name} from your friends?`,
+    message: 'You will no longer see each other’s tunes.',
+    confirmLabel: 'Remove',
+    danger: true,
+  })) return;
+  if (act === 'share' && !await confirmDialog({
+    title: `Copy all your tunes into ${name}’s library?`,
+    message: `They become ${name}’s own tunes; any they already have are skipped.`,
+    confirmLabel: 'Copy tunes',
+  })) return;
   btn.disabled = true;
   try {
     const res = await post(`friends/${act}`, act === 'cancel' ? { email } : { sub });
     draw(res);
     if (act === 'share') {
       const n = res.copied.length, skipped = res.skipped.length;
-      alert(`${n ? `Copied ${n} tune${n === 1 ? '' : 's'} into ${name}’s library.` : `Nothing new to copy.`}${skipped ? ` ${skipped} ${skipped === 1 ? 'was' : 'were'} already there.` : ''}`);
+      messageDialog(n ? `Copied ${n} tune${n === 1 ? '' : 's'} into ${name}’s library` : 'Nothing new to copy',
+        skipped ? `${skipped} ${skipped === 1 ? 'was' : 'were'} already there.` : '');
     }
   } catch (e) {
     btn.disabled = false;
-    alert(e.message);
+    messageDialog('Something went wrong', e.message);
   }
 });
 

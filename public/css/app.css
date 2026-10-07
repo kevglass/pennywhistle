@@ -387,3 +387,20 @@ button.badge.lic:hover { text-decoration: underline; }
 .license-dialog { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 64px); overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); padding: 18px; box-shadow: var(--shadow); }
 .license-dialog::backdrop { background: rgba(0, 0, 0, .4); }
 .license-dialog .row { margin-top: 14px; }
+
+/* Confirm pop-up (instead of the browser's confirm()) */
+.confirm-dialog { width: min(420px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); padding: 20px; box-shadow: var(--shadow); }
+.confirm-dialog::backdrop { background: rgba(0, 0, 0, .4); }
+.confirm-dialog h2 { margin: 0 0 8px; font-size: 1.15rem; overflow-wrap: anywhere; }
+.confirm-dialog p { margin: 0; color: var(--muted); }
+.confirm-dialog .row { margin-top: 18px; justify-content: flex-end; }
+.btn.danger-fill { background: #c92a2a; border-color: #c92a2a; color: #fff; font-weight: 600; }
+.btn.danger-fill:hover { filter: brightness(1.1); background: #c92a2a; }
+
+/* Delete button on your own tunes in the library */
+.tune-table .del-cell { width: 1%; padding-left: 0; }
+.del-tune { all: unset; cursor: pointer; display: inline-grid; place-items: center; color: var(--muted); padding: 3px; border-radius: 4px; opacity: .6; }
+.del-tune svg { width: 16px; height: 16px; }
+.tune-table tbody tr:hover .del-tune { opacity: 1; }
+.del-tune:hover { color: #c92a2a; opacity: 1; }
+.del-tune:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; opacity: 1; }

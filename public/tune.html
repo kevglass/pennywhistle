@@ -84,7 +84,7 @@ import { buildDisplayAbc } from './js/core.js';
 import { TabView, Player, tone, defaultBpm } from './js/render.js';
 import { CHORD_INSTRUMENTS, getChordInstrument } from './js/guitar.js';
 import { renderPages, showPages } from './js/originals.js';
-import { $, api, esc, topbar, renderNow, renderChordList, originalSources, tabStyleControl, instrumentControl, chordInstrumentControl, errorHTML, loginUrl, tuneRoute, isMuted, licenseBadge, checkLicense, showLicenseDialog, setFavourite } from './js/ui.js';
+import { $, api, esc, topbar, renderNow, renderChordList, originalSources, tabStyleControl, instrumentControl, chordInstrumentControl, errorHTML, loginUrl, tuneRoute, isMuted, licenseBadge, checkLicense, showLicenseDialog, setFavourite, deleteTune, messageDialog } from './js/ui.js';
 
 $('#top').insertAdjacentHTML('afterbegin', topbar());
 const params = new URLSearchParams(location.search);
@@ -118,7 +118,7 @@ async function runLicenseCheck() {
     tune.license = await checkLicense(tune.id, owner);
   } catch (e) {
     if (e.signIn) location.href = loginUrl();
-    else alert('Could not check the license: ' + e.message);
+    else messageDialog('Could not check the license', e.message);
   } finally {
     renderLicense();
   }
@@ -149,7 +149,7 @@ $('#favourite').addEventListener('click', async () => {
     tune.favourite = !on;
     renderFavourite();
     if (e.signIn) location.href = loginUrl();
-    else alert(`Could not ${on ? 'add this tune to' : 'remove this tune from'} your favourites: ${e.message}`);
+    else messageDialog(`Could not ${on ? 'add this tune to' : 'remove this tune from'} your favourites`, e.message);
   }
 });
 
@@ -209,7 +209,7 @@ try {
         chords: t.chordsUsed || [], chordInstrument: getChordInstrument(), filename: `${tune.id}-whistle-tab.pdf`,
       });
     } catch (e) {
-      alert('Could not make the PDF: ' + e.message);
+      messageDialog('Could not make the PDF', e.message);
     } finally {
       btn.disabled = false;
       btn.innerHTML = label;
@@ -226,7 +226,7 @@ try {
       const sound = inst === 'pennywhistle' ? '' : `-${inst.replace(/_/g, '-')}`;
       await downloadMp3(view, bpm, { chords, filename: `${tune.id}-${bpm}bpm${sound}${chords ? `-${chordInst.replace(/_/g, '-')}` : ''}.mp3` });
     } catch (e) {
-      alert('Could not make the MP3: ' + e.message);
+      messageDialog('Could not make the MP3', e.message);
     } finally {
       btn.disabled = false;
       btn.textContent = label;
@@ -296,18 +296,16 @@ $('#share').addEventListener('click', async () => {
     } catch (err) {
       btn.disabled = false;
       btn.textContent = 'Copy to their library';
-      alert(`Could not share: ${err.message}`);
+      messageDialog('Could not share', err.message);
     }
   });
 });
 $('#delete').addEventListener('click', async () => {
-  if (!confirm(`Delete “${tune.title}” and its original files from the library?`)) return;
   try {
-    await api(`tunes/${tune.id}/delete`, { method: 'POST' });
-    location.href = './';
+    if (await deleteTune(tune)) location.href = './';
   } catch (e) {
     if (e.signIn) location.href = loginUrl(); // nothing unsaved on this page
-    else alert('Could not delete: ' + e.message);
+    else messageDialog('Could not delete', e.message);
   }
 });
 document.addEventListener('keydown', (e) => {
