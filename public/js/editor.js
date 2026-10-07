@@ -45,6 +45,7 @@ let showOriginal = false;
 const view = new TabView($('#preview'), {
   onSelect: (item, i, ctx) => {
     renderNow($('#now'), item, ctx);
+    if (ctx.source !== 'play') player.pick(i);
     if (ctx.source !== 'play' && item.type === 'note') tone(item.midi, undefined, Math.min(0.7, 0.3 + item.beats * 0.12));
   },
 });
@@ -189,12 +190,13 @@ window.addEventListener('resize', () => {
 
 // playback
 $('#tempo').addEventListener('input', () => { $('#tempo').dataset.touched = '1'; $('#tempo-v').textContent = $('#tempo').value; });
-// The Play button starts from the top; changing a setting mid-tune carries on from the current note.
+// The Play button starts from the last tapped note, else carries on from where it was stopped, else from the top;
+// changing a setting mid-tune carries on from the current note.
 function startPlay(from = view.selected) {
   player.play(Number($('#tempo').value), from, { muted: isMuted(), chords: $('#guitar').checked });
   $('#play').textContent = '■ Stop';
 }
-$('#play').addEventListener('click', () => (player.playing ? player.stop() : startPlay(-1)));
+$('#play').addEventListener('click', () => (player.playing ? player.stop() : startPlay(player.startPoint)));
 document.addEventListener('pw-mute', () => { if (player.playing) startPlay(); }); // carry on from the current note
 $('#guitar').addEventListener('change', () => { if (player.playing) startPlay(); });
 instrumentControl($('#instrument'), () => { if (player.playing) startPlay(); });

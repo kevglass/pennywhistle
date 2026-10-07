@@ -803,12 +803,24 @@ export class Player {
     this.onStop = onStop || (() => {});
     this.timers = [];
     this.playing = false;
+    this.mark = -1; // the note the user last tapped: Play starts there until they tap another, or the tune plays to the end
+    this.finished = false; // the last play ran to the end of the tune
+  }
+
+  /** The user tapped a note: Play starts from it from now on. */
+  pick(i) { this.mark = i; this.finished = false; }
+
+  /** Where the Play button starts: the top after playing through, else the tapped note, else where playback was stopped. */
+  get startPoint() {
+    if (this.finished) return -1;
+    return this.mark >= 0 && this.mark < this.view.items.length ? this.mark : this.view.selected;
   }
 
   /** bpm counts the tune's beat unit (from Q: or the meter). Muted: no sound, the notes still highlight and scroll in time.
    *  chords: strum the chords too (on the chosen chord instrument), on each chord change and at the start of each bar. */
   play(bpm, fromItem = -1, { muted = false, chords = false } = {}) {
     this.stop();
+    this.finished = false;
     const v = this.view;
     if (!v.items.length) return;
     let order = v.playOrder();
@@ -836,10 +848,12 @@ export class Player {
         if (!v.items[idx].invisible) this.timers.push(setTimeout(() => v.select(idx, { source: 'play', scroll: true }), (t - t0) * 1000 + 120));
       },
     });
-    this.timers.push(setTimeout(() => this.stop(), (end - t0) * 1000 + 1000)); // let the room ring out
+    this.timers.push(setTimeout(() => this.stop(true), (end - t0) * 1000 + 1000)); // let the room ring out
   }
 
-  stop() {
+  stop(finished = false) {
+    this.finished = finished;
+    if (finished) this.mark = -1;
     this.timers.forEach(clearTimeout);
     this.timers = [];
     if (this.playing) { this.playing = false; this.onStop(); }
