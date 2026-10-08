@@ -48,13 +48,25 @@ export function setTabStyle(v) { try { localStorage.setItem(TAB_STYLE_KEY, v); }
 const NOTE_NAMES_KEY = 'pw-note-names';
 export function getShowNoteNames() { try { return localStorage.getItem(NOTE_NAMES_KEY) === '1'; } catch { return false; } }
 export function setShowNoteNames(on) { try { localStorage.setItem(NOTE_NAMES_KEY, on ? '1' : '0'); } catch { /* storage blocked */ } }
+// a larger score on phones and tablets, where it can be hard to read (touch screens only)
+const LARGE_SCORE_KEY = 'pw-large-score';
+const LARGE_SCALE = 1.5;
+export const isTouch = () => !!window.matchMedia?.('(pointer: coarse)').matches;
+export function getLargeScore() {
+  if (!isTouch()) return false;
+  try { return localStorage.getItem(LARGE_SCORE_KEY) === '1'; } catch { return false; }
+}
+export function setLargeScore(on) { try { localStorage.setItem(LARGE_SCORE_KEY, on ? '1' : '0'); } catch { /* storage blocked */ } }
+const getScoreScale = () => (getLargeScore() ? LARGE_SCALE : 1);
 
 const registerMark = (it) => markFor(it.holes, it.register);
 
 export class TabView {
-  constructor(container, { onSelect } = {}) {
+  /** scale: a fixed score size (e.g. 1 for the PDF); by default the one picked in the player settings. */
+  constructor(container, { onSelect, scale } = {}) {
     this.container = container;
     this.onSelect = onSelect || (() => {});
+    this.scale = scale;
     this.selected = -1;
     this.items = [];
   }
@@ -69,9 +81,14 @@ export class TabView {
     const scoreEl = document.createElement('div');
     wrap.appendChild(scoreEl);
 
-    const width = Math.max(300, c.clientWidth || 900);
-    const perLine = width < 560 ? 2 : width < 860 ? 3 : 4;
-    const visual = ABCJS.renderAbc(scoreEl, displayAbc, {
+    // a larger score is engraved at a narrower width (so fewer bars a line), then scaled up to fit
+    const scale = this.scale ?? getScoreScale();
+    const width = Math.max(300, c.clientWidth || 900) / scale;
+    const perLine = width < 300 ? 1 : width < 560 ? 2 : width < 860 ? 3 : 4;
+    // the title stays its usual size (scaled up, it would run off the narrow score); abcjs' defaults are 20 and 16
+    const abc = scale === 1 ? displayAbc : displayAbc.replace(/^(X:.*\n)?/,
+      (x) => `${x}%%titlefont "Times New Roman" ${+(20 / scale).toFixed(1)}\n%%subtitlefont "Times New Roman" ${+(16 / scale).toFixed(1)}\n`);
+    const visual = ABCJS.renderAbc(scoreEl, abc, {
       add_classes: true,
       staffwidth: width - 24,
       paddingleft: 4,
@@ -98,20 +115,26 @@ export class TabView {
     this.items = refs.map((r) => r.item);
 
     // --- make room under each line of music by shifting later lines down
+    // (in score units: TAB_H screen px once the score is scaled up)
     const svg = scoreEl.querySelector('svg');
     this.svg = svg;
     this.wrap = wrap;
+    const room = TAB_H / scale;
     let k = -1;
-    const lineShift = new Map(); // abcjs line index -> shift in px
     for (const child of [...svg.children]) {
       const cls = child.getAttribute('class') || '';
       const m = cls.match(/abcjs-staff-wrapper abcjs-l(\d+)/);
-      if (m) { k++; lineShift.set(Number(m[1]), k * TAB_H); }
-      const dy = m ? k * TAB_H : Math.max(0, k + 1) * TAB_H;
+      if (m) k++;
+      const dy = m ? k * room : Math.max(0, k + 1) * room;
       if (dy && child.tagName.toLowerCase() === 'g') child.setAttribute('transform', `translate(0 ${dy})`);
     }
-    const svgH = parseFloat(svg.getAttribute('height')) || svg.getBoundingClientRect().height;
-    svg.setAttribute('height', svgH + (k + 1) * TAB_H);
+    const svgH = (parseFloat(svg.getAttribute('height')) || svg.getBoundingClientRect().height) + (k + 1) * room;
+    if (scale !== 1) {
+      const svgW = parseFloat(svg.getAttribute('width')) || svg.getBoundingClientRect().width;
+      svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
+      svg.setAttribute('width', svgW * scale);
+    }
+    svg.setAttribute('height', svgH * scale);
     svg.style.overflow = 'visible';
     scoreEl.style.height = 'auto'; // abcjs pins the container to the original height
 

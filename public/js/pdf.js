@@ -90,7 +90,7 @@ export async function downloadPdf({ displayAbc, title, composer, key, meter, cho
   host.style.cssText = `position:absolute;left:-30000px;top:0;width:${LAYOUT_WIDTH}px;color:#000`;
   document.body.appendChild(host);
   try {
-    const view = new TabView(host);
+    const view = new TabView(host, { scale: 1 });
     view.render(displayAbc);
     if (!view.lineBoxes?.length) throw new Error('Nothing to export');
 

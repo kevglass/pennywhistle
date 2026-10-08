@@ -1,4 +1,4 @@
-import { holesSVG, beatsLabel, getTabStyle, setTabStyle, getShowNoteNames, setShowNoteNames, INSTRUMENTS, getInstrument, setInstrument } from './render.js';
+import { holesSVG, beatsLabel, getTabStyle, setTabStyle, getShowNoteNames, setShowNoteNames, isTouch, getLargeScore, setLargeScore, INSTRUMENTS, getInstrument, setInstrument } from './render.js';
 import { fingerNumbers, markFor } from './core.js';
 import { chordDiagramSVG, CHORD_INSTRUMENTS, getChordInstrument, setChordInstrument } from './guitar.js';
 
@@ -145,10 +145,11 @@ export function renderChordList(el, names) {
     : '<p class="muted">No chords.</p>';
 }
 
-/** "Tab: Numbers | Hole diagrams" switch. onChange re-renders the tab. */
+/** "Tab: Numbers | Hole diagrams" switch. onChange re-renders the tab (also when the top bar's zoom button changes the score size). */
 export function tabStyleControl(el, onChange) {
   el.innerHTML = `<label for="tab-style">Tab</label> <select id="tab-style"><option value="numbers">Numbers</option><option value="holes">Hole diagrams</option></select>
     <label class="small check"><input type="checkbox" id="note-names"> Note names</label>`;
+  document.addEventListener('pw-score-size', onChange);
   const sel = el.querySelector('select');
   sel.value = getTabStyle();
   sel.addEventListener('change', () => { setTabStyle(sel.value); onChange(); });
@@ -206,6 +207,21 @@ function playerToggle() {
 }
 document.addEventListener('click', (e) => {
   if (e.target.closest('.player-toggle')) setPlayerCollapsed(!playerCollapsed());
+});
+
+// ---- score zoom: a larger score on touch screens, where it can be hard to read (remembered)
+const ZOOM_ICON = (large) => `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M7.5 10.5h6${large ? '' : 'M10.5 7.5v6'}"/></svg>`;
+function zoomButton() {
+  if (!document.body.classList.contains('has-player') || !isTouch()) return '';
+  const large = getLargeScore(), label = large ? 'Normal size music' : 'Larger music';
+  return `<button class="btn score-zoom" type="button" aria-pressed="${large}" aria-label="${label}" title="${label}">${ZOOM_ICON(large)}</button>`;
+}
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.score-zoom');
+  if (!btn) return;
+  setLargeScore(!getLargeScore());
+  btn.outerHTML = zoomButton();
+  document.dispatchEvent(new Event('pw-score-size'));
 });
 if (document.querySelector('.player')) {
   let collapsed = false;
@@ -281,7 +297,7 @@ document.addEventListener('fullscreenchange', () => {
 export function topbar(active) {
   return `<header class="topbar">
     <a class="brand" href="./" aria-label="Penny Whistle Tabs: library"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="13" width="26" height="6" rx="3" fill="var(--accent)"/><circle cx="12" cy="16" r="1.6" fill="var(--surface)"/><circle cx="17" cy="16" r="1.6" fill="var(--surface)"/><circle cx="22" cy="16" r="1.6" fill="var(--surface)"/><rect x="3" y="13" width="5" height="6" rx="2" fill="var(--ink)"/></svg><span class="brand-long">Penny Whistle Tabs</span><span class="brand-short">Whistle Tabs</span></a>
-    <nav>${playerToggle()}<a class="btn nav-library ${active === 'library' ? 'primary' : ''}" href="./">Library</a><details class="more account" id="account" hidden>
+    <nav>${zoomButton()}${playerToggle()}<a class="btn nav-library ${active === 'library' ? 'primary' : ''}" href="./">Library</a><details class="more account" id="account" hidden>
       <summary class="btn" aria-label="Account"></summary>
       <div class="menu"><div class="who"></div><a class="btn" id="friends-link" href="friends.html">Friends</a><button class="btn" id="password-link" type="button" hidden>Change password</button>${themeButton()}${fullscreenButton()}<button class="btn" id="sign-out" type="button">Sign out</button></div>
     </details></nav>
@@ -294,7 +310,12 @@ setTimeout(showUser);
 // sticky panes and scrolling into view keep clear of it.
 {
   const head = document.getElementById('top');
-  if (head) new ResizeObserver(() => document.documentElement.style.setProperty('--head-h', `${head.offsetHeight}px`)).observe(head);
+  // --bar-h: the top bar alone, which scrolls away on a phone held sideways (see app.css)
+  if (head) new ResizeObserver(() => {
+    const root = document.documentElement.style;
+    root.setProperty('--head-h', `${head.offsetHeight}px`);
+    root.setProperty('--bar-h', `${head.querySelector('.topbar')?.offsetHeight || 0}px`);
+  }).observe(head);
 }
 
 /** API route of a tune: your own, or a friend's (read-only, tune.owner is set). */

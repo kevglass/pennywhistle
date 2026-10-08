@@ -50,11 +50,11 @@ html { scroll-padding-top: calc(var(--head-h, 64px) + 8px); }
 #top { position: sticky; top: 0; z-index: 50; padding-top: var(--safe-top); background: var(--surface); box-shadow: 0 2px 10px rgba(0,0,0,.08); }
 .topbar { display: flex; align-items: center; gap: 16px; padding: 12px calc(20px + var(--safe-right)) 12px calc(20px + var(--safe-left)); border-bottom: 1px solid var(--line); background: var(--surface); }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--ink); text-decoration: none; }
-.brand svg { width: 26px; height: 26px; }
+.brand svg { flex: 0 0 auto; width: 26px; height: 26px; }
 .topbar nav { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 
-main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 60px; }
-.site-footer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; height: calc(var(--foot-h) + var(--safe-bottom, 0px)); padding: 0 16px var(--safe-bottom, 0px); text-align: center; line-height: calc(var(--foot-h) - 1px); font-size: .85rem; color: var(--muted); background: var(--surface); border-top: 1px solid var(--line); }
+main { max-width: 1280px; margin: 0 auto; padding: 20px calc(16px + var(--safe-right)) 60px calc(16px + var(--safe-left)); }
+.site-footer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; height: calc(var(--foot-h) + var(--safe-bottom, 0px)); padding: 0 calc(16px + var(--safe-right)) var(--safe-bottom, 0px) calc(16px + var(--safe-left)); text-align: center; line-height: calc(var(--foot-h) - 1px); font-size: .85rem; color: var(--muted); background: var(--surface); border-top: 1px solid var(--line); }
 body { padding-bottom: calc(var(--foot-h) + var(--safe-bottom, 0px)); }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
 .stack > * + * { margin-top: 16px; }
@@ -189,6 +189,8 @@ body:not(.has-player) .player, body:not(.has-player) .player-toggle, .player.col
 .player .settings-toggle { display: none; }
 .player .mute-toggle { padding: 4px 8px; }
 .player .mute-toggle svg { display: block; }
+.score-zoom { justify-content: center; padding-left: 9px; padding-right: 9px; }
+.score-zoom svg { display: block; }
 .now { margin-left: auto; display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; white-space: nowrap; }
 .now .mini-holes svg { display: block; }
 .now .mini-holes .h-closed, .now .mini-holes .h-half { fill: var(--hi); }
@@ -221,6 +223,8 @@ body:not(.has-player) .player, body:not(.has-player) .player-toggle, .player.col
   .player.show-settings .settings #instrument { grid-column: 2 / -1; max-width: 100%; }
   .player.show-settings .settings .check, .player.show-settings .settings .btn { grid-column: 1 / -1; justify-self: start; }
   .player.show-settings .settings-toggle { background: var(--accent-soft); border-color: var(--accent); }
+  /* never taller than the screen below the bar (a phone held sideways) */
+  .player.show-settings .settings { max-height: calc(100vh - var(--head-h, 64px)); max-height: calc(100dvh - var(--head-h, 64px)); overflow-y: auto; overscroll-behavior: contain; }
 }
 @media (max-width: 640px) {
   .player { gap: 6px; padding-right: 8px; }
@@ -279,7 +283,7 @@ body:not(.has-player) .player, body:not(.has-player) .player-toggle, .player.col
   .brand-short { display: inline; }
   .topbar nav { gap: 6px; }
   .topbar nav .btn { padding: 7px 10px; }
-  main { padding: 12px 10px 24px; }
+  main { padding: 12px calc(10px + var(--safe-right)) 24px calc(10px + var(--safe-left)); }
   h1 { font-size: 1.35rem; }
   .card { padding: 14px; }
   .lib-head .row, .lib-head input { width: 100%; }
@@ -296,6 +300,18 @@ body:not(.has-player) .player, body:not(.has-player) .player-toggle, .player.col
   .tabview { padding: 6px 2px; border-radius: 8px; }
   .original-pane { max-height: 50vh; }
 
+}
+
+/* ---------- phones held sideways: little height to spare, so the top bar scrolls away (only the
+   player stays stuck to the top) and the footer sits at the end of the page instead of over it */
+@media (orientation: landscape) and (max-height: 500px) {
+  #top { top: calc(-1 * var(--bar-h, 0px)); }
+  html { scroll-padding-top: calc(var(--head-h, 64px) - var(--bar-h, 0px) + 8px); }
+  .topbar { padding-top: 4px; padding-bottom: 4px; }
+  main { padding-top: 12px; padding-bottom: 16px; }
+  .site-footer { position: static; }
+  body { padding-bottom: 0; }
+  .original-pane { top: calc(var(--head-h, 64px) - var(--bar-h, 0px) + 8px); max-height: 80vh; }
 }
 
 @media print {
@@ -321,6 +337,10 @@ body:not(.has-player) .player, body:not(.has-player) .player-toggle, .player.col
 }
 @media (max-width: 380px) {
   .brand .brand-short { display: none; }
+}
+/* the score zoom button (touch screens, tune page) takes the name's room on phones: the logo alone links to the library */
+@media (max-width: 440px) {
+  .topbar:has(.score-zoom) .brand-short { display: none; }
 }
 
 /* ---- library sections (yours, then each friend's) */
