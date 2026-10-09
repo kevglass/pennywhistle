@@ -52,13 +52,16 @@
     </button>
     <div class="step-body stack" id="body-upload">
       <div class="dropzone" id="drop" tabindex="0" role="button" aria-label="Choose sheet music files">
-        <div><strong>Choose a PDF or image files</strong> or drop them here</div>
-        <div class="muted small">PDF, PNG, JPG or WebP. Several images are read as pages, in the order chosen.</div>
+        <div><strong id="drop-label">Choose PDF or image files</strong> or drop them here</div>
+        <div class="muted small">PDF, PNG, JPG or WebP. Add as many files as the score needs; the pages are read in the order added.</div>
         <input type="file" id="file" accept="application/pdf,image/png,image/jpeg,image/webp,image/gif" multiple hidden>
       </div>
       <div id="thumbs" class="thumbs"></div>
       <div id="upload-status" class="status" aria-live="polite"></div>
-      <p class="muted small" style="margin:0">No file? <button class="btn" id="example" type="button">Load an example</button></p>
+      <div class="approve-bar">
+        <p class="muted small" style="margin:0">No file? <button class="btn" id="example" type="button">Load an example</button></p>
+        <button class="btn primary" id="done-upload" type="button" disabled>Done uploading</button>
+      </div>
     </div>
   </section>
 

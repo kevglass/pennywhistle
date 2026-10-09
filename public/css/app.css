@@ -132,6 +132,10 @@ details > summary { cursor: pointer; font-weight: 600; }
 .page figcaption { font-size: .75rem; color: var(--muted); padding: 4px 2px; }
 .thumbs { display: flex; gap: 10px; overflow-x: auto; padding: 4px 0; }
 .thumbs .page { flex: 0 0 120px; margin: 0; }
+.thumb-file { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); }
+.thumb-file-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: .8rem; }
+.thumb-file-head span { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thumb-pages { display: flex; gap: 8px; }
 
 /* ---------- tab view */
 .tab-pane { min-width: 0; }

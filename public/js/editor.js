@@ -221,43 +221,88 @@ function setOriginalVisible(v) {
 }
 $('#toggle-original').addEventListener('click', () => setOriginalVisible(!showOriginal));
 
-async function loadPages(sources, label) {
+// The uploaded files in the order added, each with its rendered pages. Together they make up one score.
+let uploads = [];
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+function uploadSummary() {
+  if (uploads.length === 1 && uploads[0].file.type !== 'application/pdf') return 'Image uploaded';
+  if (uploads.length === 1) return `PDF uploaded, ${plural(pages.length, 'page')}`;
+  return `${plural(pages.length, 'page')} from ${plural(uploads.length, 'file')}`;
+}
+
+function syncPages() {
+  pages = uploads.flatMap((u) => u.pages);
+  originalFiles = uploads.map((u) => u.file);
+  showPages($('#original'), pages);
+  // thumbnails, grouped by file so a whole file can be removed
+  $('#thumbs').innerHTML = uploads.map((u, i) => `<div class="thumb-file">
+      <div class="thumb-file-head"><span title="${esc(u.file.name || '')}">${esc(u.file.name || 'File ' + (i + 1))}</span>
+        <button class="btn compact" type="button" data-remove="${i}" aria-label="Remove ${esc(u.file.name || 'file ' + (i + 1))}">✕</button></div>
+      <div class="thumb-pages">${u.pages.map((p) => `<figure class="page"><img alt="${esc(p.label)}" src="${p.thumb ??= p.canvas.toDataURL('image/jpeg', 0.6)}"><figcaption>${esc(p.label)}</figcaption></figure>`).join('')}</div>
+    </div>`).join('');
+  $('#drop-label').textContent = pages.length ? 'Add more pages' : 'Choose PDF or image files';
+  $('#done-upload').disabled = !pages.length;
+  $('#read').disabled = !pages.length || !(window.__canTranscribe || singlePdf());
+  summary('upload', pages.length ? esc(uploadSummary()) : '');
+  setOriginalVisible(false);
+}
+
+/** Add files to the score. `notes` are messages to show alongside the result (e.g. skipped files). */
+async function addFiles(files, notes = []) {
   $('#upload-status').innerHTML = '<span class="spinner"></span> Loading pages…';
-  try {
-    pages = await renderPages(sources);
-    originalFiles = sources;
-    showPages($('#original'), pages);
-    // thumbnails share the same canvases' images
-    $('#thumbs').innerHTML = pages.map((p) => `<figure class="page"><img alt="${esc(p.label)}" src="${p.canvas.toDataURL('image/jpeg', 0.6)}"><figcaption>${esc(p.label)}</figcaption></figure>`).join('');
-    $('#upload-status').textContent = `${pages.length} page${pages.length === 1 ? '' : 's'}. Choose another file to replace ${pages.length === 1 ? 'it' : 'them'}.`;
-    $('#read').disabled = !pages.length || !(window.__canTranscribe || singlePdf());
-    setOriginalVisible(false);
-    if (label) {
-      summary('upload', esc(label));
-      summary('convert', '');
-      $('#status').innerHTML = '';
-      openStep(2);
+  for (const file of files) {
+    try {
+      uploads.push({ file, pages: await renderPages([file]) });
+    } catch (e) {
+      notes.push(`Could not open ${file.name || 'that file'}: ${e.message}`);
     }
-  } catch (e) {
-    $('#upload-status').innerHTML = `<span class="error">Could not open that file: ${esc(e.message)}</span>`;
   }
+  syncPages();
+  const msg = pages.length ? `${plural(pages.length, 'page')} from ${plural(uploads.length, 'file')}. Add more files to complete the score, or press Done uploading.` : '';
+  $('#upload-status').innerHTML = [msg && esc(msg), ...notes.map((n) => `<span class="error">${esc(n)}</span>`)].filter(Boolean).join(' ');
+}
+
+/** Existing pages (when editing a saved tune) replace any uploads. */
+async function loadPages(sources) {
+  uploads = [];
+  await addFiles(sources);
+}
+
+// A changed score needs processing again.
+function scoreChanged() {
+  summary('convert', '');
+  $('#status').innerHTML = '';
 }
 
 function chooseFiles(list) {
   const chosen = [...list];
   const bad = chosen.filter((f) => !ACCEPTED.includes(f.type));
-  if (bad.length) $('#upload-status').innerHTML = `<span class="error">Skipped unsupported file(s): ${bad.map((f) => esc(f.name)).join(', ')}. Use PDF, PNG, JPG or WebP.</span>`;
+  const notes = bad.length ? [`Skipped unsupported file(s): ${bad.map((f) => f.name).join(', ')}. Use PDF, PNG, JPG or WebP.`] : [];
   // The pages are only needed while transcribing; they aren't saved with the tune.
   const accepted = chosen.filter((f) => ACCEPTED.includes(f.type));
-  if (!accepted.length) return;
-  const label = accepted[0].type === 'application/pdf' ? 'PDF uploaded'
-    : accepted.length === 1 ? 'Image uploaded' : `${accepted.length} images uploaded`;
-  loadPages(accepted, label);
+  if (!accepted.length) { $('#upload-status').innerHTML = notes.map((n) => `<span class="error">${esc(n)}</span>`).join(''); return; }
+  scoreChanged();
+  addFiles(accepted, notes);
 }
+
+$('#thumbs').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-remove]');
+  if (!btn) return;
+  uploads.splice(Number(btn.dataset.remove), 1);
+  scoreChanged();
+  syncPages();
+  $('#upload-status').textContent = pages.length ? `${plural(pages.length, 'page')} from ${plural(uploads.length, 'file')}.` : '';
+});
+
+$('#done-upload').addEventListener('click', () => {
+  if (pages.length) openStep(2);
+});
+
 const drop = $('#drop');
 drop.addEventListener('click', () => $('#file').click());
 drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#file').click(); } });
-$('#file').addEventListener('change', (e) => chooseFiles(e.target.files));
+$('#file').addEventListener('change', (e) => { chooseFiles(e.target.files); e.target.value = ''; }); // so the same file can be added again
 drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('drag'); });
 drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
 drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('drag'); chooseFiles(e.dataTransfer.files); });
